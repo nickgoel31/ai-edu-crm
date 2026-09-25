@@ -46,7 +46,7 @@ export async function POST(
   const { orgToken } = params;
 
   // Rate limit: 60 requests per minute per ERP token / IP
-  const rl = checkRateLimit(req, "webhook:erp-sync", {
+  const rl = await checkRateLimit(req, "webhook:erp-sync", {
     limit: 60,
     windowMs: 60000,
     identifier: orgToken,

@@ -11,7 +11,7 @@ import { logActivity } from "@/lib/activity";
 
 export async function POST(req: Request) {
   // Rate limit: 120 requests per minute for agent webhooks
-  const rl = checkRateLimit(req, "webhook:agent-conversation", { limit: 120, windowMs: 60000 });
+  const rl = await checkRateLimit(req, "webhook:agent-conversation", { limit: 120, windowMs: 60000 });
   if (!rl.allowed && rl.response) {
     return rl.response;
   }

@@ -40,7 +40,7 @@ import { checkRateLimit } from "@/lib/rate-limiter";
 
 export async function POST(req: Request) {
   // Rate limit: 60 requests per minute
-  const rl = checkRateLimit(req, "webhook:meta", { limit: 60, windowMs: 60000 });
+  const rl = await checkRateLimit(req, "webhook:meta", { limit: 60, windowMs: 60000 });
   if (!rl.allowed && rl.response) {
     return rl.response;
   }

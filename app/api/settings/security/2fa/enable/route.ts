@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized: Active session required." }, { status: 401 });
   }
 
-  const rl = checkRateLimit(req, "2fa:enable", { limit: 10, windowMs: 60_000, identifier: session.user.id });
+  const rl = await checkRateLimit(req, "2fa:enable", { limit: 10, windowMs: 60_000, identifier: session.user.id });
   if (!rl.allowed && rl.response) return rl.response;
 
   try {

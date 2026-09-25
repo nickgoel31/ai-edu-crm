@@ -47,7 +47,7 @@ function originAllowed(req: Request, allowedDomains: string | undefined): boolea
 }
 
 export async function POST(req: Request, { params }: { params: { agentId: string } }) {
-  const rl = checkRateLimit(req, "widget:chat", { limit: 30, windowMs: 60000, identifier: params.agentId });
+  const rl = await checkRateLimit(req, "widget:chat", { limit: 30, windowMs: 60000, identifier: params.agentId });
   if (!rl.allowed && rl.response) {
     return rl.response;
   }

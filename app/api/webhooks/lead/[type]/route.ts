@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: { params: { type: string } 
     return NextResponse.json({ error: `Unknown or unsupported lead channel: ${params.type}` }, { status: 404 });
   }
 
-  const rate = checkRateLimit(req, `webhook:lead:${type}`, { limit: 120, windowMs: 60_000 });
+  const rate = await checkRateLimit(req, `webhook:lead:${type}`, { limit: 120, windowMs: 60_000 });
   if (!rate.allowed) return rate.response!;
 
   try {

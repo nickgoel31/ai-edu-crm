@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const rl = checkRateLimit(req, "data-retention:erase", { limit: 3, windowMs: 60 * 60 * 1000, identifier: session.user.organizationId });
+  const rl = await checkRateLimit(req, "data-retention:erase", { limit: 3, windowMs: 60 * 60 * 1000, identifier: session.user.organizationId });
   if (!rl.allowed && rl.response) return rl.response;
 
   try {
