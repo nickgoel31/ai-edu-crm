@@ -7,6 +7,7 @@ import { AgentChannel, AgentRole, AgentStatus, ConversationOutcome, LeadSource, 
 import { AIConfigError, generateChatCompletion, resolveModel, type ChatMessage } from "@/lib/ai/llm";
 import { buildAgentSystemPrompt, fetchAgentKnowledgeText, parseAgentConfigSafe } from "@/lib/ai/agent-context";
 import { getBillingGate } from "@/lib/billing/access";
+import { notifyEscalation } from "@/lib/notifications";
 
 // Transcript lines are prefixed so a follow-up turn can reconstruct message
 // history from the stored Conversation row without any extra schema.
@@ -213,7 +214,10 @@ export async function POST(req: Request, { params }: { params: { agentId: string
       });
     }
 
-    if (outcome === ConversationOutcome.ESCALATED) {
+    // Only alert on the transition into ESCALATED, not on every subsequent
+    // turn of an already-escalated conversation.
+    const wasAlreadyEscalated = conversation?.outcome === ConversationOutcome.ESCALATED;
+    if (outcome === ConversationOutcome.ESCALATED && !wasAlreadyEscalated) {
       await prisma.auditLog.create({
         data: {
           organizationId: agent.organizationId,
@@ -223,6 +227,19 @@ export async function POST(req: Request, { params }: { params: { agentId: string
           changesJson: JSON.stringify({ agentName: agent.name, channel: "WEBSITE_CHAT", leadId }),
         },
       });
+
+      try {
+        await notifyEscalation({
+          organizationId: agent.organizationId,
+          conversationId: savedConversation.id,
+          agentName: agent.name,
+          channel: "WEBSITE_CHAT",
+          contactName: visitor?.name,
+          contactPhone: visitor?.phone,
+        });
+      } catch (err) {
+        console.error("Failed to send escalation notification:", err);
+      }
     }
 
     return NextResponse.json({

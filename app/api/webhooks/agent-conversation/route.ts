@@ -8,6 +8,7 @@ import { ConversationOutcome, LeadSource, LeadStage } from "@/types";
 
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { logActivity } from "@/lib/activity";
+import { notifyEscalation } from "@/lib/notifications";
 
 export async function POST(req: Request) {
   // Rate limit: 120 requests per minute for agent webhooks
@@ -253,7 +254,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // If escalated, log audit event
+    // If escalated, log audit event and alert staff immediately (not just
+    // via tomorrow's daily digest — a lead asking for a human is urgent).
     if (resolvedOutcome === ConversationOutcome.ESCALATED) {
       await prisma.auditLog.create({
         data: {
@@ -270,6 +272,22 @@ export async function POST(req: Request) {
           }),
         },
       });
+
+      // Awaited (not fire-and-forget): on serverless, a promise left
+      // running after the response is sent can be killed before it
+      // completes, silently dropping the alert.
+      try {
+        await notifyEscalation({
+          organizationId: orgId,
+          conversationId: conversation.id,
+          agentName: agent.name,
+          channel: resolvedChannel,
+          contactName: callerName || name,
+          contactPhone: rawPhone,
+        });
+      } catch (err) {
+        console.error("Failed to send escalation notification:", err);
+      }
     }
 
     return NextResponse.json(

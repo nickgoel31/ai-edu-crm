@@ -397,6 +397,53 @@ export async function sendNotificationWhatsApp({
 }
 
 /**
+ * Sends an immediate (not batched into the next daily digest) email/WhatsApp
+ * alert to every ADMIN/COUNSELOR in the org who has escalations notifications
+ * enabled for that channel. Escalations are time-sensitive — a lead asking
+ * for a human right now shouldn't wait for tomorrow's digest to be noticed.
+ */
+export async function notifyEscalation(params: {
+  organizationId: string;
+  conversationId: string;
+  agentName: string;
+  channel: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
+}) {
+  const { organizationId, conversationId, agentName, channel, contactName, contactPhone } = params;
+
+  const staff = await prisma.user.findMany({
+    where: { organizationId, role: { in: ["ADMIN", "COUNSELOR"] } },
+    include: { notificationPreference: true },
+  });
+
+  const subject = `🚨 Escalation: ${contactName || "A lead"} needs a human`;
+  const text = `${agentName} (${channel}) escalated a conversation with ${contactName || "a contact"}${
+    contactPhone ? ` (${contactPhone})` : ""
+  }. Claim it from the Agents Automation queue.`;
+  const html = `<p><strong>${agentName}</strong> (${channel}) escalated a conversation with <strong>${
+    contactName || "a contact"
+  }</strong>${contactPhone ? ` (${contactPhone})` : ""}.</p><p>Claim it from the Agents Automation queue.</p>`;
+
+  const results = await Promise.allSettled(
+    staff.flatMap((user) => {
+      const pref = user.notificationPreference;
+      const sends: Promise<any>[] = [];
+
+      if (pref?.escalationsEmail && user.email) {
+        sends.push(sendNotificationEmail({ to: user.email, subject, html, text }));
+      }
+      if (pref?.escalationsWhatsapp && pref.whatsappNumber) {
+        sends.push(sendNotificationWhatsApp({ to: pref.whatsappNumber, message: text, organizationId }));
+      }
+      return sends;
+    })
+  );
+
+  return { conversationId, notified: results.length };
+}
+
+/**
  * Compiles and formats daily digest content for a user
  */
 export async function generateDailyDigest({
