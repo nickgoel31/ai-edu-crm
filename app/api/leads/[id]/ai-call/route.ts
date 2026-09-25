@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
 import { assertCanMutate } from "@/lib/rbac";
 import { logActivity } from "@/lib/activity";
 import { ConversationOutcome } from "@/types";
 import { AIConfigError, generateChatCompletion, resolveModel } from "@/lib/ai/llm";
 import { buildAgentSystemPrompt, fetchAgentKnowledgeText, parseAgentConfigSafe } from "@/lib/ai/agent-context";
+import { getBillingGate } from "@/lib/billing/access";
 
 export async function POST(
   req: Request,
@@ -23,6 +25,24 @@ export async function POST(
 
   try {
     assertCanMutate(session);
+
+    const org = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { subscriptionStatus: true, trialEndsAt: true },
+    });
+    const gate = getBillingGate(org!);
+    if (gate.isBlocked) {
+      return NextResponse.json(
+        {
+          error:
+            gate.status === "trial_expired"
+              ? "Your 14-day trial has ended. Add a payment method in Settings → Billing to keep using AI agents."
+              : "Your subscription is inactive. Update billing in Settings → Billing to keep using AI agents.",
+        },
+        { status: 402 }
+      );
+    }
+
     const { id } = params;
     const body = await req.json().catch(() => ({}));
     const { agentId, goal } = body;

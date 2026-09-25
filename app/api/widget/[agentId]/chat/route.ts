@@ -6,6 +6,7 @@ import { normalizePhoneNumber, getPhoneSearchVariations } from "@/lib/lead-inges
 import { AgentChannel, AgentRole, AgentStatus, ConversationOutcome, LeadSource, LeadStage } from "@/types";
 import { AIConfigError, generateChatCompletion, resolveModel, type ChatMessage } from "@/lib/ai/llm";
 import { buildAgentSystemPrompt, fetchAgentKnowledgeText, parseAgentConfigSafe } from "@/lib/ai/agent-context";
+import { getBillingGate } from "@/lib/billing/access";
 
 // Transcript lines are prefixed so a follow-up turn can reconstruct message
 // history from the stored Conversation row without any extra schema.
@@ -82,6 +83,17 @@ export async function POST(req: Request, { params }: { params: { agentId: string
       return NextResponse.json({ error: "This domain is not authorized to embed this agent." }, { status: 403 });
     }
 
+    const org = await prisma.organization.findUnique({
+      where: { id: agent.organizationId },
+      select: { name: true, subscriptionStatus: true, trialEndsAt: true },
+    });
+    if (org && getBillingGate(org).isBlocked) {
+      return NextResponse.json(
+        { error: "This chat agent is temporarily unavailable." },
+        { status: 503 }
+      );
+    }
+
     let conversation = conversationId
       ? await prisma.conversation.findUnique({ where: { id: conversationId } })
       : null;
@@ -91,16 +103,11 @@ export async function POST(req: Request, { params }: { params: { agentId: string
 
     const history = transcriptToMessages(conversation?.transcript || "");
 
-    const organization = await prisma.organization.findUnique({
-      where: { id: agent.organizationId },
-      select: { name: true },
-    });
-
     const knowledgeText = await fetchAgentKnowledgeText(agent.id);
     const system = buildAgentSystemPrompt({
       role: agent.role as AgentRole,
       agentName: agent.name,
-      organizationName: organization?.name || "the institution",
+      organizationName: org?.name || "the institution",
       config,
       knowledgeText,
       extraContext: [

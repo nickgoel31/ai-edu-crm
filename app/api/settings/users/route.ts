@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
 import { authOptions } from "@/lib/auth";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
+import { prisma } from "@/lib/prisma";
 import { Role } from "@/types";
+import { PLAN_CONFIGS, type PlanId } from "@/lib/billing/stripe";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -97,6 +99,23 @@ export async function POST(req: Request) {
     }
 
     const scopedDb = getScopedPrismaClient(session);
+
+    const org = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { plan: true },
+    });
+    const seatLimit = PLAN_CONFIGS[org?.plan as PlanId]?.seatLimit ?? Infinity;
+    if (Number.isFinite(seatLimit)) {
+      const currentSeats = await scopedDb.user.count();
+      if (currentSeats >= seatLimit) {
+        return NextResponse.json(
+          {
+            error: `Your ${PLAN_CONFIGS[org!.plan as PlanId]?.name || "current"} plan is limited to ${seatLimit} seats. Upgrade in Settings → Billing to add more.`,
+          },
+          { status: 402 }
+        );
+      }
+    }
 
     // Check if user already exists within this organization
     const existing = await scopedDb.user.findFirst({

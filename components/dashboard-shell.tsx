@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { BottomNav } from "@/components/bottom-nav";
+import { TrialBanner } from "@/components/trial-banner";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,6 +22,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-background">
+        <TrialBanner />
         <Topbar />
         <main className="flex-1 px-3 sm:px-4 md:px-6 py-6 pb-28 md:pb-12 bg-background overflow-y-auto">
           {children}

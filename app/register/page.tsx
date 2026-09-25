@@ -102,7 +102,6 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("SELF_SERVE_AGENTS");
 
-  const [sessionId, setSessionId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
@@ -124,32 +123,13 @@ export default function RegisterPage() {
     setStep(2);
   };
 
-  const handleProceedToCheckout = async () => {
+  const handleProceedToCheckout = () => {
     setError(null);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan: selectedPlan,
-          email,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to initialize checkout session.");
-      }
-
-      setSessionId(data.sessionId || "sub_sess_mock_active");
-      setStep(3);
-    } catch (err: any) {
-      setError(err?.message || "Failed to proceed to checkout.");
-    } finally {
-      setIsLoading(false);
-    }
+    // No payment session to create here — the selected plan just sets what
+    // the trial starts on. A real Stripe checkout only happens later, from
+    // Settings → Billing, once the org (and a session to authorize it)
+    // actually exists.
+    setStep(3);
   };
 
   const handleFinalSubmit = async () => {
@@ -174,18 +154,10 @@ export default function RegisterPage() {
         throw new Error(regData?.error || "Registration failed.");
       }
 
-      const orgId = regData.organization.id;
-
-      await fetch("/api/billing/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          plan: selectedPlan,
-          organizationId: orgId,
-        }),
-      });
-
+      // Registration itself starts the org's 14-day trial server-side
+      // (subscriptionStatus: TRIALING) — nothing to "verify" here since no
+      // payment was collected. A real subscription only activates via the
+      // Stripe webhook once the org checks out from Settings → Billing.
       setCheckoutSuccess(true);
 
       const loginRes = await signIn("credentials", {
@@ -461,10 +433,10 @@ export default function RegisterPage() {
                   <CreditCard className="w-6 h-6" />
                 </div>
                 <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                  Review & Confirm Subscription
+                  Review & Start Your Trial
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Self-serve activation for {organizationName}
+                  14-day free trial for {organizationName}
                 </p>
               </div>
             </CardHeader>
@@ -475,7 +447,7 @@ export default function RegisterPage() {
                 <div className="flex items-center justify-between mb-3 pb-3 border-b border-border">
                   <div>
                     <span className="text-sm font-bold text-foreground">{activePlanDetails.name}</span>
-                    <p className="text-xs text-muted-foreground">Monthly Recurring Plan</p>
+                    <p className="text-xs text-muted-foreground">After your trial, billed monthly</p>
                   </div>
                   <div className="text-right">
                     <span className="text-base font-bold text-foreground">{activePlanDetails.priceInr}</span>
@@ -493,24 +465,25 @@ export default function RegisterPage() {
                     <span className="font-medium text-foreground">{email}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Billing Cycle</span>
-                    <span className="font-medium text-foreground">Monthly auto-renew</span>
+                    <span>Trial Length</span>
+                    <span className="font-medium text-foreground">14 days</span>
                   </div>
                 </div>
 
                 <div className="pt-3 border-t border-border flex justify-between items-center text-sm font-bold text-foreground">
-                  <span>Total Due Today</span>
-                  <span className="text-primary text-base">{activePlanDetails.priceInr}</span>
+                  <span>Due Today</span>
+                  <span className="text-emerald-500 text-base">₹0</span>
                 </div>
               </Card>
 
-              {/* Payment Method Details */}
+              {/* Trial, not a fake payment form — no card is charged here. */}
               <Alert>
                 <ShieldCheck />
                 <AlertDescription>
-                  <p className="font-semibold text-foreground">Secure Payment Gateway (Stripe & Razorpay)</p>
+                  <p className="font-semibold text-foreground">14-day free trial, no card required</p>
                   <p className="mt-0.5">
-                    Instant subscription provisioning. You will receive an invoice and onboarding link immediately upon activation.
+                    Your workspace starts on a full-access trial today. Add a payment method any time from
+                    Settings → Billing — you won't be charged until you do.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -525,12 +498,12 @@ export default function RegisterPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Activating Subscription & Account...</span>
+                      <span>Starting your trial...</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Pay {activePlanDetails.priceInr} & Launch Workspace</span>
+                      <span>Start 14-day free trial</span>
                     </>
                   )}
                 </Button>

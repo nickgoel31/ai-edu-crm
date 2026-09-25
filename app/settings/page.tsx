@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database } from "lucide-react";
+import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function SettingsPage() {
@@ -242,6 +242,27 @@ export default function SettingsPage() {
                 </div>
               </div>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/billing" className="group block">
+          <Card className="hover:ring-emerald-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Billing
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Manage your plan, trial, and subscription (ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
             </CardContent>
           </Card>
         </Link>

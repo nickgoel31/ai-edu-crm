@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { TRIAL_DAYS } from "@/lib/billing/stripe";
 
 export async function POST(req: Request) {
   try {
@@ -57,7 +58,12 @@ export async function POST(req: Request) {
           name: trimmedOrgName,
           slug,
           plan: selectedPlan,
-          subscriptionStatus: "ACTIVE",
+          // Every org starts on a real, time-boxed trial — no payment
+          // collected at signup. lib/billing/access.ts blocks AI-agent
+          // usage (not the rest of the CRM) once this runs out with no
+          // active Stripe subscription behind it.
+          subscriptionStatus: "TRIALING",
+          trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
         },
       });
 

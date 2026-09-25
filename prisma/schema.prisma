@@ -15,11 +15,15 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  plan                 String  @default("SELF_SERVE")
-  subscriptionStatus   String  @default("ACTIVE")
+  plan                 String    @default("SELF_SERVE")
+  subscriptionStatus   String    @default("ACTIVE")
   stripeCustomerId     String?
   stripeSubscriptionId String?
-  onboardingDismissed  Boolean @default(false)
+  // Set on signup to now+14d; cleared once a real Stripe subscription
+  // activates. lib/billing/access.ts reads this to gate AI-agent usage
+  // once a trial has run out with no active subscription behind it.
+  trialEndsAt          DateTime?
+  onboardingDismissed  Boolean   @default(false)
 
   users                   User[]
   leads                   Lead[]
