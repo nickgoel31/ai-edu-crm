@@ -341,6 +341,14 @@ export function LeadTableView({
         return "bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/25";
       case "CALL_TRACKING":
         return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25";
+      case "LINKEDIN_LEAD_GEN":
+        return "bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25";
+      case "ZAPIER":
+        return "bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25";
+      case "INDIAMART":
+        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25";
+      case "CUSTOM_API":
+        return "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25";
       case "CSV_IMPORT":
       case "REFERRAL":
       case "MANUAL":

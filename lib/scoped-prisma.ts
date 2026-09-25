@@ -398,6 +398,77 @@ export function getScopedPrismaClient(
         },
       },
       messageTemplate: createTenantQueryHooks("organizationId"),
+      knowledgeBase: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.knowledgeBase.findFirst({
+            where: {
+              ...(where as object),
+              organizationId,
+            },
+            ...rest,
+          });
+        },
+      },
+      knowledgeBaseDocument: {
+        async findMany({ args, query }: any) {
+          args.where = { ...args.where, knowledgeBase: { organizationId } };
+          return query(args);
+        },
+        async findFirst({ args, query }: any) {
+          args.where = { ...args.where, knowledgeBase: { organizationId } };
+          return query(args);
+        },
+        async count({ args, query }: any) {
+          args.where = { ...args.where, knowledgeBase: { organizationId } };
+          return query(args);
+        },
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.knowledgeBaseDocument.findFirst({
+            where: {
+              ...(where as object),
+              knowledgeBase: { organizationId },
+            },
+            ...rest,
+          });
+        },
+        async create({ args, query }: any) {
+          return query(args);
+        },
+        async update({ args, query }: any) {
+          return query(args);
+        },
+        async delete({ args, query }: any) {
+          return query(args);
+        },
+        async deleteMany({ args, query }: any) {
+          return query(args);
+        },
+      },
+      agentKnowledgeBase: {
+        async findMany({ args, query }: any) {
+          args.where = { ...args.where, agent: { organizationId } };
+          return query(args);
+        },
+        async findFirst({ args, query }: any) {
+          args.where = { ...args.where, agent: { organizationId } };
+          return query(args);
+        },
+        async create({ args, query }: any) {
+          return query(args);
+        },
+        async createMany({ args, query }: any) {
+          return query(args);
+        },
+        async delete({ args, query }: any) {
+          return query(args);
+        },
+        async deleteMany({ args, query }: any) {
+          return query(args);
+        },
+      },
       organization: {
         async findFirst({ args, query }) {
           args.where = { ...args.where, id: organizationId };

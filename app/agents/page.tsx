@@ -29,6 +29,8 @@ import {
   AgentRole,
   AgentCategory,
   AGENT_ROLE_META,
+  AGENT_CATEGORY_LABELS,
+  AGENT_MARKETPLACE_ROLES,
   ConversationOutcome,
 } from "@/types";
 import { AGENT_CATALOG } from "@/lib/agent-catalog";
@@ -253,12 +255,24 @@ export default function AgentsDashboardPage() {
   // Active Agents = every Agent record actually deployed for this org.
   const activeAgents = agents;
 
-  // Available Agents (catalog) = every role NOT yet deployed for this org.
+  // Available Agents (marketplace) = curated 10-agent catalog, minus roles already deployed.
   const deployedRoles = useMemo(() => new Set(agents.map((a) => a.role)), [agents]);
   const availableCatalogEntries = useMemo(
-    () => AGENT_CATALOG.filter((entry) => !deployedRoles.has(entry.role)),
+    () =>
+      AGENT_CATALOG.filter(
+        (entry) => AGENT_MARKETPLACE_ROLES.includes(entry.role) && !deployedRoles.has(entry.role)
+      ),
     [deployedRoles]
   );
+  const marketplaceByCategory = useMemo(() => {
+    const groups = new Map<AgentCategory, typeof availableCatalogEntries>();
+    for (const entry of availableCatalogEntries) {
+      const category = AGENT_ROLE_META[entry.role].category;
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category)!.push(entry);
+    }
+    return groups;
+  }, [availableCatalogEntries]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -555,53 +569,60 @@ export default function AgentsDashboardPage() {
                 )}
               </div>
 
-              {/* Available Agents (catalog) */}
+              {/* Agent Marketplace, grouped by category */}
               {availableCatalogEntries.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-6">
                   <div className="flex items-center gap-2 border-b border-border pb-2">
-                    <h2 className="text-sm font-bold text-foreground">Available Agents</h2>
+                    <h2 className="text-sm font-bold text-foreground">Agent Marketplace</h2>
                     <Badge variant="outline" className="bg-muted/40 text-zinc-400 border-border">
-                      {availableCatalogEntries.length}
+                      {availableCatalogEntries.length} available
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {availableCatalogEntries.map((entry) => {
-                      const meta = AGENT_ROLE_META[entry.role];
-                      const Icon = getAgentIcon(meta.channel);
+                  {Array.from(marketplaceByCategory.entries()).map(([category, entries]) => (
+                    <div key={category} className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        {AGENT_CATEGORY_LABELS[category]}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {entries.map((entry) => {
+                          const meta = AGENT_ROLE_META[entry.role];
+                          const Icon = getAgentIcon(meta.channel);
 
-                      return (
-                        <Link key={entry.role} href={`/agents/${entry.role}`} className="group block">
-                          <Card className="p-0 flex-col justify-between overflow-hidden h-full border-dashed hover:border-solid hover:ring-1 hover:ring-blue-500/40 transition-all">
-                            <div className="p-4 space-y-2.5 flex-1">
-                              <div className="flex items-center gap-2.5">
-                                <div className="p-2 rounded-lg bg-muted text-muted-foreground border border-border group-hover:text-blue-500 group-hover:border-blue-500/30 transition-colors">
-                                  <Icon className="w-4 h-4" />
+                          return (
+                            <Link key={entry.role} href={`/agents/${entry.role}`} className="group block">
+                              <Card className="p-0 flex-col justify-between overflow-hidden h-full border-dashed hover:border-solid hover:ring-1 hover:ring-blue-500/40 transition-all">
+                                <div className="p-4 space-y-2.5 flex-1">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="p-2 rounded-lg bg-muted text-muted-foreground border border-border group-hover:text-blue-500 group-hover:border-blue-500/30 transition-colors">
+                                      <Icon className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h3 className="font-semibold text-foreground text-xs leading-tight">
+                                        {entry.name}
+                                      </h3>
+                                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                        {meta.channel.replace(/_/g, " ")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground leading-relaxed">{entry.description}</p>
                                 </div>
-                                <div>
-                                  <h3 className="font-semibold text-foreground text-xs leading-tight">
-                                    {entry.name}
-                                  </h3>
-                                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                                    {meta.channel.replace(/_/g, " ")}
+
+                                <div className="p-3.5 border-t border-border bg-card flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Not added</span>
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-600 dark:hover:text-blue-300">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>Add to CRM</span>
                                   </span>
                                 </div>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground leading-relaxed">{entry.description}</p>
-                            </div>
-
-                            <div className="p-3.5 border-t border-border bg-card flex items-center justify-between gap-2">
-                              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Not deployed</span>
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-600 dark:hover:text-blue-300">
-                                <Sparkles className="w-3.5 h-3.5" />
-                                <span>Deploy</span>
-                              </span>
-                            </div>
-                          </Card>
-                        </Link>
-                      );
-                    })}
-                  </div>
+                              </Card>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </>

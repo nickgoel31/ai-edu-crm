@@ -12,6 +12,15 @@ export function canAccessSettings(role?: Role | null): boolean {
   return role === "ADMIN";
 }
 
+/**
+ * Single source of truth for "is this pathname admin-only". Used by
+ * middleware.ts to gate navigation, and safe to reuse from client
+ * components (sidebar/topbar) so the rule never drifts between them.
+ */
+export function isAdminOnlyPath(pathname: string): boolean {
+  return pathname === "/settings" || pathname.startsWith("/settings/");
+}
+
 export function canMutate(role?: Role | null): boolean {
   return role === "ADMIN" || role === "COUNSELOR";
 }

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
 import { assertCanMutate } from "@/lib/rbac";
 import { AgentChannel, AgentRole, AgentStatus, AGENT_ROLE_META, ConversationOutcome } from "@/types";
+import { buildAgentConfigJson, maskAgentConfigForClient } from "@/lib/agent-config";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -106,7 +107,7 @@ export async function GET(req: Request) {
           workingHours: config.workingHours || "09:00 - 20:00 IST",
           language: config.language || "en-IN",
           scriptPromptVersion: config.scriptPromptVersion || config.systemPromptVersion || "v1.0",
-          ...config,
+          ...maskAgentConfigForClient(agent.role as AgentRole, config),
         },
         createdAt: agent.createdAt,
         updatedAt: agent.updatedAt,
@@ -173,6 +174,8 @@ export async function POST(req: Request) {
       scriptPromptVersion,
       outboundWebhookUrl,
       extraConfig,
+      configValues,
+      knowledgeBaseIds,
     } = body;
 
     if (!name?.trim() || !role || !Object.values(AgentRole).includes(role)) {
@@ -188,6 +191,13 @@ export async function POST(req: Request) {
 
     const scopedDb = getScopedPrismaClient(session);
 
+    const configJson = buildAgentConfigJson(role as AgentRole, {
+      workingHours: workingHours || "09:00 - 20:00 IST",
+      language: language || "en-IN",
+      scriptPromptVersion: scriptPromptVersion || "v1.0",
+      ...(extraConfig && typeof extraConfig === "object" ? extraConfig : {}),
+    }, configValues && typeof configValues === "object" ? configValues : {});
+
     const agent = await scopedDb.agent.create({
       data: {
         organizationId: session.user.organizationId,
@@ -197,14 +207,21 @@ export async function POST(req: Request) {
         category: roleMeta.category,
         status: status === AgentStatus.PAUSED ? AgentStatus.PAUSED : AgentStatus.LIVE,
         outboundWebhookUrl: outboundWebhookUrl?.trim() || null,
-        config: JSON.stringify({
-          workingHours: workingHours || "09:00 - 20:00 IST",
-          language: language || "en-IN",
-          scriptPromptVersion: scriptPromptVersion || "v1.0",
-          ...(extraConfig && typeof extraConfig === "object" ? extraConfig : {}),
-        }),
+        config: configJson,
       },
     });
+
+    if (Array.isArray(knowledgeBaseIds) && knowledgeBaseIds.length > 0) {
+      const validKbs = await scopedDb.knowledgeBase.findMany({
+        where: { id: { in: knowledgeBaseIds } },
+        select: { id: true },
+      });
+      if (validKbs.length > 0) {
+        await scopedDb.agentKnowledgeBase.createMany({
+          data: validKbs.map((kb) => ({ agentId: agent.id, knowledgeBaseId: kb.id })),
+        });
+      }
+    }
 
     await scopedDb.auditLog.create({
       data: {

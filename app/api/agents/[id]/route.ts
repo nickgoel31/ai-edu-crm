@@ -3,8 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
 import { assertCanMutate, assertAdmin } from "@/lib/rbac";
-import { AgentStatus, ConversationOutcome } from "@/types";
+import { AgentRole, AgentStatus, ConversationOutcome } from "@/types";
 import { prisma } from "@/lib/prisma";
+import { buildAgentConfigJson, maskAgentConfigForClient } from "@/lib/agent-config";
 
 export async function GET(
   req: Request,
@@ -36,6 +37,11 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    const agentKnowledgeBases = await scopedDb.agentKnowledgeBase.findMany({
+      where: { agentId: id },
+      select: { knowledgeBaseId: true, knowledgeBase: { select: { id: true, name: true } } },
+    });
 
     // Build conversation where filter
     const conversationWhere: any = { agentId: id };
@@ -142,13 +148,15 @@ export async function GET(
       language: rawConfig.language || "en-IN",
       scriptPromptVersion:
         rawConfig.scriptPromptVersion || rawConfig.systemPromptVersion || "v1.0",
-      ...rawConfig,
+      ...maskAgentConfigForClient(agent.role as AgentRole, rawConfig),
     };
 
     return NextResponse.json({
       agent: {
         ...agent,
         config,
+        knowledgeBaseIds: agentKnowledgeBases.map((a) => a.knowledgeBaseId),
+        knowledgeBases: agentKnowledgeBases.map((a) => a.knowledgeBase),
       },
       conversations,
       outcomeCounts,
@@ -191,7 +199,17 @@ export async function PATCH(
     assertCanMutate(session);
     const { id } = params;
     const body = await req.json();
-    const { status, name, workingHours, language, scriptPromptVersion, extraConfig, outboundWebhookUrl } = body;
+    const {
+      status,
+      name,
+      workingHours,
+      language,
+      scriptPromptVersion,
+      extraConfig,
+      outboundWebhookUrl,
+      configValues,
+      knowledgeBaseIds,
+    } = body;
 
     const scopedDb = getScopedPrismaClient(session);
 
@@ -232,16 +250,16 @@ export async function PATCH(
       currentConfig = {};
     }
     let configUpdated = false;
-    const newConfig = { ...currentConfig, ...extraConfig };
+    const plainUpdates: Record<string, any> = { ...extraConfig };
 
     if (workingHours !== undefined && workingHours !== currentConfig.workingHours) {
-      newConfig.workingHours = workingHours.trim();
+      plainUpdates.workingHours = workingHours.trim();
       auditChanges.workingHours = { from: currentConfig.workingHours, to: workingHours.trim() };
       configUpdated = true;
     }
 
     if (language !== undefined && language !== currentConfig.language) {
-      newConfig.language = language.trim();
+      plainUpdates.language = language.trim();
       auditChanges.language = { from: currentConfig.language, to: language.trim() };
       configUpdated = true;
     }
@@ -250,7 +268,7 @@ export async function PATCH(
       scriptPromptVersion !== undefined &&
       scriptPromptVersion !== currentConfig.scriptPromptVersion
     ) {
-      newConfig.scriptPromptVersion = scriptPromptVersion.trim();
+      plainUpdates.scriptPromptVersion = scriptPromptVersion.trim();
       auditChanges.scriptPromptVersion = {
         from: currentConfig.scriptPromptVersion,
         to: scriptPromptVersion.trim(),
@@ -258,18 +276,37 @@ export async function PATCH(
       configUpdated = true;
     }
 
-    if (configUpdated) {
-      updates.config = JSON.stringify(newConfig);
+    if (configValues && typeof configValues === "object" && Object.keys(configValues).length > 0) {
+      Object.assign(plainUpdates, configValues);
+      configUpdated = true;
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (configUpdated) {
+      updates.config = buildAgentConfigJson(existingAgent.role as AgentRole, currentConfig, plainUpdates);
+    }
+
+    if (Array.isArray(knowledgeBaseIds)) {
+      const validKbs = await scopedDb.knowledgeBase.findMany({
+        where: { id: { in: knowledgeBaseIds } },
+        select: { id: true },
+      });
+      await scopedDb.agentKnowledgeBase.deleteMany({ where: { agentId: id } });
+      if (validKbs.length > 0) {
+        await scopedDb.agentKnowledgeBase.createMany({
+          data: validKbs.map((kb) => ({ agentId: id, knowledgeBaseId: kb.id })),
+        });
+      }
+      auditChanges.knowledgeBaseIds = { from: undefined, to: validKbs.map((k) => k.id) };
+    }
+
+    if (Object.keys(updates).length === 0 && !Array.isArray(knowledgeBaseIds)) {
       return NextResponse.json({ agent: existingAgent });
     }
 
-    const updatedAgent = await scopedDb.agent.update({
-      where: { id },
-      data: updates,
-    });
+    const updatedAgent =
+      Object.keys(updates).length > 0
+        ? await scopedDb.agent.update({ where: { id }, data: updates })
+        : existingAgent;
 
     // Write audit log
     await scopedDb.auditLog.create({

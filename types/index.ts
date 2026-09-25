@@ -16,6 +16,10 @@ export const LeadSource = {
   CSV_IMPORT: "CSV_IMPORT",
   CALL_TRACKING: "CALL_TRACKING",
   REFERRAL: "REFERRAL",
+  LINKEDIN_LEAD_GEN: "LINKEDIN_LEAD_GEN",
+  ZAPIER: "ZAPIER",
+  INDIAMART: "INDIAMART",
+  CUSTOM_API: "CUSTOM_API",
   MANUAL: "MANUAL",
 } as const;
 export type LeadSource = (typeof LeadSource)[keyof typeof LeadSource];
@@ -97,28 +101,65 @@ export const AGENT_ROLE_META: Record<
   AgentRole,
   { label: string; category: AgentCategory; channel: AgentChannel }
 > = {
-  INBOUND_CALL_RECEIVER: { label: "Inbound Call Receiver", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.VOICE },
-  LEAD_TELECALLER: { label: "Lead Telecaller", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.VOICE },
+  INBOUND_CALL_RECEIVER: { label: "Inbound AI Receptionist", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.VOICE },
+  LEAD_TELECALLER: { label: "Lead Auto Caller", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.VOICE },
   WHATSAPP_NURTURE: { label: "WhatsApp Nurture", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.WHATSAPP },
   EMAIL_NURTURE: { label: "Email Nurture", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.EMAIL },
-  REENGAGEMENT: { label: "Re-engagement", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.WHATSAPP },
-  LEAD_QUALIFICATION: { label: "Lead Qualification", category: AgentCategory.CONVERSION, channel: AgentChannel.VOICE },
-  COUNSELLOR: { label: "Counsellor", category: AgentCategory.CONVERSION, channel: AgentChannel.WEBSITE_CHAT },
+  REENGAGEMENT: { label: "Cold Lead Win-back Agent", category: AgentCategory.CONVERSION, channel: AgentChannel.WHATSAPP },
+  LEAD_QUALIFICATION: { label: "WhatsApp Lead Qualification Agent", category: AgentCategory.CONVERSION, channel: AgentChannel.WHATSAPP },
+  COUNSELLOR: { label: "Website Live Guide", category: AgentCategory.ACQUISITION_NURTURE, channel: AgentChannel.WEBSITE_CHAT },
   INTERVIEW_SCREENING: { label: "Interview Screening", category: AgentCategory.CONVERSION, channel: AgentChannel.VOICE },
-  DOCUMENT_COLLECTION: { label: "Document Collection", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.WHATSAPP },
-  PAYMENT_REMINDER: { label: "Payment Reminder", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.WHATSAPP },
-  ONBOARDING: { label: "Onboarding", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.EMAIL },
-  SUPPORT_ESCALATION: { label: "Support Escalation", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.VOICE },
+  DOCUMENT_COLLECTION: { label: "Document Collection Bot", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.WHATSAPP },
+  PAYMENT_REMINDER: { label: "Fee Reminder Agent", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.WHATSAPP },
+  ONBOARDING: { label: "Onboarding and Orientation Agent", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.WHATSAPP },
+  SUPPORT_ESCALATION: { label: "Support Line Agent", category: AgentCategory.STUDENT_OPS, channel: AgentChannel.VOICE },
   FEEDBACK_NPS: { label: "Feedback & NPS", category: AgentCategory.GROWTH_RETENTION, channel: AgentChannel.EMAIL },
-  ALUMNI_REFERRAL: { label: "Alumni Referral", category: AgentCategory.GROWTH_RETENTION, channel: AgentChannel.WHATSAPP },
+  ALUMNI_REFERRAL: { label: "Alumni Referral Agent", category: AgentCategory.GROWTH_RETENTION, channel: AgentChannel.WHATSAPP },
 };
 
 export const AGENT_CATEGORY_LABELS: Record<AgentCategory, string> = {
-  ACQUISITION_NURTURE: "Acquisition & Nurture",
+  ACQUISITION_NURTURE: "Acquisition & Engagement",
   CONVERSION: "Conversion",
-  STUDENT_OPS: "Student Ops",
-  GROWTH_RETENTION: "Growth & Retention",
+  STUDENT_OPS: "Student Operations",
+  GROWTH_RETENTION: "Growth & Alumni",
 };
+
+// The curated set of 10 production-ready agent templates featured in the
+// Agent Marketplace (app/agents/page.tsx). Older catalog roles (WHATSAPP_NURTURE,
+// EMAIL_NURTURE, INTERVIEW_SCREENING, FEEDBACK_NPS) still work if an org already
+// has one deployed, but are no longer offered as new marketplace listings.
+export const AGENT_MARKETPLACE_ROLES: AgentRole[] = [
+  AgentRole.INBOUND_CALL_RECEIVER,
+  AgentRole.LEAD_TELECALLER,
+  AgentRole.COUNSELLOR,
+  AgentRole.LEAD_QUALIFICATION,
+  AgentRole.REENGAGEMENT,
+  AgentRole.DOCUMENT_COLLECTION,
+  AgentRole.PAYMENT_REMINDER,
+  AgentRole.ONBOARDING,
+  AgentRole.SUPPORT_ESCALATION,
+  AgentRole.ALUMNI_REFERRAL,
+];
+
+export const WhatsappProvider = {
+  META_CLOUD_API: "META_CLOUD_API",
+  THIRD_PARTY_BSP: "THIRD_PARTY_BSP",
+} as const;
+export type WhatsappProvider = (typeof WhatsappProvider)[keyof typeof WhatsappProvider];
+
+export const VoiceProvider = {
+  TWILIO: "TWILIO",
+  EXOTEL: "EXOTEL",
+  PLIVO: "PLIVO",
+} as const;
+export type VoiceProvider = (typeof VoiceProvider)[keyof typeof VoiceProvider];
+
+export const AI_MODEL_OPTIONS = [
+  { value: "gpt-4o-mini", label: "GPT-4o mini (fast, low-cost)" },
+  { value: "gpt-4o", label: "GPT-4o (higher quality)" },
+  { value: "claude-3-5-haiku", label: "Claude 3.5 Haiku (fast, low-cost)" },
+  { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet (higher quality)" },
+] as const;
 
 export const AgentTriggerEvent = {
   LEAD_CREATED: "LEAD_CREATED",
@@ -247,9 +288,136 @@ export const IntegrationType = {
   META_ADS: "META_ADS",
   WHATSAPP: "WHATSAPP",
   GOOGLE_SHEETS: "GOOGLE_SHEETS",
+  GOOGLE_ADS: "GOOGLE_ADS",
+  WEBSITE_FORM: "WEBSITE_FORM",
+  CSV_IMPORT: "CSV_IMPORT",
+  CALL_TRACKING: "CALL_TRACKING",
+  REFERRAL: "REFERRAL",
+  LINKEDIN_LEAD_GEN: "LINKEDIN_LEAD_GEN",
+  ZAPIER: "ZAPIER",
+  INDIAMART: "INDIAMART",
+  CUSTOM_API: "CUSTOM_API",
   ERP: "ERP",
 } as const;
 export type IntegrationType = (typeof IntegrationType)[keyof typeof IntegrationType];
+
+// A lead-ingestion channel is any IntegrationType except ERP (which syncs
+// Student fee/attendance/exam data, not inbound leads).
+export const LEAD_CHANNEL_TYPES: IntegrationType[] = [
+  IntegrationType.META_ADS,
+  IntegrationType.WHATSAPP,
+  IntegrationType.GOOGLE_SHEETS,
+  IntegrationType.GOOGLE_ADS,
+  IntegrationType.WEBSITE_FORM,
+  IntegrationType.CSV_IMPORT,
+  IntegrationType.CALL_TRACKING,
+  IntegrationType.REFERRAL,
+  IntegrationType.LINKEDIN_LEAD_GEN,
+  IntegrationType.ZAPIER,
+  IntegrationType.INDIAMART,
+  IntegrationType.CUSTOM_API,
+];
+
+export const IntegrationCategory = {
+  AD_PLATFORMS: "AD_PLATFORMS",
+  MESSAGING: "MESSAGING",
+  FORMS_AND_REFERRAL: "FORMS_AND_REFERRAL",
+  DATA_IMPORT: "DATA_IMPORT",
+  AUTOMATION: "AUTOMATION",
+} as const;
+export type IntegrationCategory = (typeof IntegrationCategory)[keyof typeof IntegrationCategory];
+
+export const INTEGRATION_CATEGORY_LABELS: Record<IntegrationCategory, string> = {
+  AD_PLATFORMS: "Ad Platforms",
+  MESSAGING: "Messaging",
+  FORMS_AND_REFERRAL: "Forms & Referral",
+  DATA_IMPORT: "Data Import",
+  AUTOMATION: "Automation & Custom",
+};
+
+export const INTEGRATION_TYPE_META: Record<
+  IntegrationType,
+  { label: string; description: string; category: IntegrationCategory; leadSource: LeadSource | null }
+> = {
+  META_ADS: {
+    label: "Meta Lead Ads",
+    description: "Facebook & Instagram Lead Ads forms, pushed in real time via the Meta webhook.",
+    category: IntegrationCategory.AD_PLATFORMS,
+    leadSource: LeadSource.META_ADS,
+  },
+  GOOGLE_ADS: {
+    label: "Google Ads Lead Forms",
+    description: "Google Ads lead form extensions, forwarded via Zapier/Make or Google's own webhook connector.",
+    category: IntegrationCategory.AD_PLATFORMS,
+    leadSource: LeadSource.GOOGLE_ADS,
+  },
+  WHATSAPP: {
+    label: "WhatsApp Business",
+    description: "Inbound WhatsApp Business Cloud API messages captured as new leads.",
+    category: IntegrationCategory.MESSAGING,
+    leadSource: LeadSource.WHATSAPP,
+  },
+  CALL_TRACKING: {
+    label: "Call Tracking",
+    description: "Missed-call and IVR lead capture from providers like Exotel, Knowlarity, or CloudTalk.",
+    category: IntegrationCategory.MESSAGING,
+    leadSource: LeadSource.CALL_TRACKING,
+  },
+  WEBSITE_FORM: {
+    label: "Website Forms",
+    description: "Contact/enquiry forms on your website (Webflow, WordPress, custom HTML) via webhook.",
+    category: IntegrationCategory.FORMS_AND_REFERRAL,
+    leadSource: LeadSource.WEBSITE_FORM,
+  },
+  LINKEDIN_LEAD_GEN: {
+    label: "LinkedIn Lead Gen Forms",
+    description: "LinkedIn native lead generation forms, forwarded via Zapier/Make.",
+    category: IntegrationCategory.FORMS_AND_REFERRAL,
+    leadSource: LeadSource.LINKEDIN_LEAD_GEN,
+  },
+  REFERRAL: {
+    label: "Referral Program",
+    description: "Student/alumni referral links and forms — track who referred each new lead.",
+    category: IntegrationCategory.FORMS_AND_REFERRAL,
+    leadSource: LeadSource.REFERRAL,
+  },
+  INDIAMART: {
+    label: "IndiaMART",
+    description: "Inbound buy-leads from your IndiaMART seller account.",
+    category: IntegrationCategory.FORMS_AND_REFERRAL,
+    leadSource: LeadSource.INDIAMART,
+  },
+  GOOGLE_SHEETS: {
+    label: "Google Sheets",
+    description: "Scheduled sync from a shared Google Sheet of enquiries.",
+    category: IntegrationCategory.DATA_IMPORT,
+    leadSource: LeadSource.GOOGLE_SHEETS,
+  },
+  CSV_IMPORT: {
+    label: "CSV Import",
+    description: "One-off or recurring bulk upload of leads from a CSV file.",
+    category: IntegrationCategory.DATA_IMPORT,
+    leadSource: LeadSource.CSV_IMPORT,
+  },
+  ZAPIER: {
+    label: "Zapier / Make",
+    description: "A generic inbound webhook for any of the 6000+ apps on Zapier, Make, or Pabbly Connect.",
+    category: IntegrationCategory.AUTOMATION,
+    leadSource: LeadSource.ZAPIER,
+  },
+  CUSTOM_API: {
+    label: "Custom API",
+    description: "A generic authenticated webhook for any other source not listed here.",
+    category: IntegrationCategory.AUTOMATION,
+    leadSource: LeadSource.CUSTOM_API,
+  },
+  ERP: {
+    label: "Enterprise ERP Sync",
+    description: "Bi-directional student fee/attendance/exam sync with your campus ERP.",
+    category: IntegrationCategory.AUTOMATION,
+    leadSource: null,
+  },
+};
 
 export const ErpSyncDirection = {
   OUTBOUND: "OUTBOUND",

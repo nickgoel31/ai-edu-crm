@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+
+function SignupSuccessBanner() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("signup_success") !== "true") return null;
+
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2.5 text-xs text-emerald-400">
+      <CheckCircle2 className="w-4 h-4 shrink-0" />
+      <span>Account created. Sign in with your new credentials to continue.</span>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -229,6 +241,10 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
+
+        <Suspense fallback={null}>
+          <SignupSuccessBanner />
+        </Suspense>
 
         {/* Error Alert */}
         {error && (

@@ -1,5 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import { isAdminOnlyPath } from "@/lib/rbac";
 
 export default withAuth(
   function middleware(req) {
@@ -8,10 +9,8 @@ export default withAuth(
 
     // Enforce role-based access for Settings & user management
     // COUNSELOR & READONLY are prohibited from accessing /settings
-    if (pathname === "/settings" || pathname.startsWith("/settings/")) {
-      if (token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/?access_denied=admin_required", req.url));
-      }
+    if (isAdminOnlyPath(pathname) && token?.role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/?access_denied=admin_required", req.url));
     }
 
     return NextResponse.next();
@@ -32,6 +31,7 @@ export const config = {
     "/leads/:path*",
     "/students/:path*",
     "/agents/:path*",
+    "/knowledge-base/:path*",
     "/reports/:path*",
     "/settings/:path*",
     "/settings",

@@ -42,7 +42,7 @@ import {
   ConversationOutcome,
 } from "@/types";
 import { TranscriptDialog } from "@/components/agents/transcript-dialog";
-import { AgentSetupForm } from "@/components/agents/agent-setup-form";
+import { DynamicAgentForm } from "@/components/agents/dynamic-agent-form";
 import { getCatalogEntry, isValidAgentRole } from "@/lib/agent-catalog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -113,6 +113,7 @@ interface AgentDetail {
     scriptPromptVersion: string;
     [key: string]: any;
   };
+  knowledgeBaseIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -153,14 +154,6 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Config Form State
-  const [workingHours, setWorkingHours] = useState("");
-  const [language, setLanguage] = useState("en-IN");
-  const [scriptPromptVersion, setScriptPromptVersion] = useState("");
-  const [outboundWebhookUrl, setOutboundWebhookUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [embedSnippet, setEmbedSnippet] = useState("");
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   // Transcript Dialog
@@ -219,16 +212,6 @@ export default function AgentDetailPage() {
       setConversations(data.conversations || []);
       if (data.outcomeCounts) setOutcomeCounts(data.outcomeCounts);
       if (data.metrics) setMetrics(data.metrics);
-
-      // Populate config state
-      if (data.agent?.config) {
-        setWorkingHours(data.agent.config.workingHours || "09:00 - 20:00 IST");
-        setLanguage(data.agent.config.language || "en-IN");
-        setScriptPromptVersion(data.agent.config.scriptPromptVersion || "v1.0");
-        setOutboundWebhookUrl(data.agent.outboundWebhookUrl || "");
-        setApiKey(data.agent.config.apiKey || "");
-        setEmbedSnippet(data.agent.config.embedSnippet || "");
-      }
       setMode("deployed");
     } catch (err: any) {
       setError(err?.message || "Failed to load agent profile.");
@@ -270,43 +253,6 @@ export default function AgentDetailPage() {
       setError(err?.message || "Failed to toggle agent status.");
     } finally {
       setIsTogglingStatus(false);
-    }
-  };
-
-  // Save Config Panel
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canMutate) return;
-
-    setIsSavingConfig(true);
-    setError(null);
-    try {
-      const isChatChannel = agent?.channel === AgentChannel.WEBSITE_CHAT;
-
-      const res = await fetch(`/api/agents/${agentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workingHours: workingHours.trim(),
-          language,
-          scriptPromptVersion: scriptPromptVersion.trim(),
-          outboundWebhookUrl: isChatChannel ? undefined : outboundWebhookUrl.trim(),
-          extraConfig: isChatChannel
-            ? { embedSnippet: embedSnippet.trim() }
-            : { apiKey: apiKey.trim() },
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to save configuration.");
-
-      setSuccess("Agent configuration saved successfully.");
-      setTimeout(() => setSuccess(null), 3000);
-      fetchAgentData();
-    } catch (err: any) {
-      setError(err?.message || "Failed to save configuration.");
-    } finally {
-      setIsSavingConfig(false);
     }
   };
 
@@ -363,7 +309,7 @@ export default function AgentDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Agents Dashboard</span>
         </Link>
-        <AgentSetupForm entry={catalogEntry} orgSlug={session?.user?.organizationName} />
+        <DynamicAgentForm role={catalogEntry.role} mode="create" entry={catalogEntry} />
       </div>
     );
   }
@@ -538,154 +484,21 @@ export default function AgentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Config Panel */}
         <div className="space-y-6 lg:col-span-1">
-          <Card className="p-5">
-            <div className="border-b border-border/60 pb-2">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
-                <FileCode2 className="w-4 h-4 text-blue-400" />
-                <span>Agent Configuration</span>
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Runtime metadata stored for Retell / Dograh orchestration.
-              </p>
-            </div>
-
-            <form onSubmit={handleSaveConfig} className="space-y-4 text-xs">
-              {/* Channel-specific config */}
-              {agent.channel === AgentChannel.WEBSITE_CHAT ? (
-                <div className="space-y-1.5">
-                  <Label className="font-semibold text-zinc-300">
-                    <span>Website Embed Snippet</span>
-                  </Label>
-                  <textarea
-                    value={embedSnippet}
-                    onChange={(e) => setEmbedSnippet(e.target.value)}
-                    disabled={!canMutate}
-                    rows={3}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-[11px] font-mono text-foreground disabled:opacity-60"
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <Label className="font-semibold text-zinc-300">
-                      <span>Outbound Webhook URL</span>
-                    </Label>
-                    <Input
-                      type="url"
-                      value={outboundWebhookUrl}
-                      onChange={(e) => setOutboundWebhookUrl(e.target.value)}
-                      placeholder="https://api.retellai.com/... or https://your-dograh-instance/webhook"
-                      disabled={!canMutate}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="font-semibold text-zinc-300">
-                      <span>API Key</span>
-                    </Label>
-                    <Input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-••••••••••••••••"
-                      disabled={!canMutate}
-                      autoComplete="off"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Working Hours */}
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-zinc-300">
-                  <Clock className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>Working Hours</span>
-                </Label>
-                <Input
-                  type="text"
-                  value={workingHours}
-                  onChange={(e) => setWorkingHours(e.target.value)}
-                  placeholder="e.g. 09:00 - 20:00 IST"
-                  disabled={!canMutate}
-                />
-                <div className="flex gap-1 pt-1">
-                  {["09:00 - 20:00 IST", "24/7 Active", "10:00 - 18:00 IST"].map((preset) => (
-                    <Button
-                      key={preset}
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      onClick={() => setWorkingHours(preset)}
-                      isDisabled={!canMutate}
-                    >
-                      {preset}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Language Selection */}
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-zinc-300">
-                  <Languages className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>Primary Language</span>
-                </Label>
-                <Select
-                  selectedKey={language}
-                  onSelectionChange={(key) => setLanguage(String(key))}
-                  isDisabled={!canMutate}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem id="en-IN">English (India - en-IN)</SelectItem>
-                    <SelectItem id="hi-IN">Hindi (hi-IN)</SelectItem>
-                    <SelectItem id="hi-Latn">Hinglish (Colloquial - hi-Latn)</SelectItem>
-                    <SelectItem id="mr-IN">Marathi (mr-IN)</SelectItem>
-                    <SelectItem id="ta-IN">Tamil (ta-IN)</SelectItem>
-                    <SelectItem id="te-IN">Telugu (te-IN)</SelectItem>
-                    <SelectItem id="kn-IN">Kannada (kn-IN)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Script / Prompt Version Label */}
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-zinc-300">
-                  <Bot className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>Script / Prompt Version</span>
-                </Label>
-                <Input
-                  type="text"
-                  value={scriptPromptVersion}
-                  onChange={(e) => setScriptPromptVersion(e.target.value)}
-                  placeholder="e.g. v2.4-vocational-closer"
-                  disabled={!canMutate}
-                  className="font-mono"
-                />
-                <p className="text-[10px] text-zinc-500">
-                  Labels version deployed on Retell / Dograh without altering core agent logic.
-                </p>
-              </div>
-
-              {/* Save Button */}
-              {canMutate && (
-                <Button type="submit" isDisabled={isSavingConfig} className="w-full">
-                  {isSavingConfig ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Changes...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Config</span>
-                    </>
-                  )}
-                </Button>
-              )}
-            </form>
-          </Card>
+          {canMutate ? (
+            <DynamicAgentForm
+              role={agent.role}
+              mode="edit"
+              agentId={agent.id}
+              initialName={agent.name}
+              initialConfig={agent.config}
+              initialKnowledgeBaseIds={agent.knowledgeBaseIds || []}
+            />
+          ) : (
+            <Card className="p-5 text-xs text-muted-foreground">
+              <FileCode2 className="w-4 h-4 text-blue-400 mb-2" />
+              Read-only accounts cannot edit agent configuration.
+            </Card>
+          )}
         </div>
 
         {/* Right Column: Conversation Logs / Automation */}

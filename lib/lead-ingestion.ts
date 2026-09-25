@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { LeadSource, LeadStage, IntegrationType } from "@/types";
+import { LeadSource, LeadStage, IntegrationType, INTEGRATION_TYPE_META } from "@/types";
+
+// Reverse lookup built from INTEGRATION_TYPE_META so every current and future
+// lead channel updates its own Integration row's sync stats correctly,
+// instead of falling back to the wrong channel.
+const LEAD_SOURCE_TO_INTEGRATION_TYPE: Partial<Record<LeadSource, IntegrationType>> = Object.fromEntries(
+  Object.entries(INTEGRATION_TYPE_META)
+    .filter(([, meta]) => meta.leadSource)
+    .map(([type, meta]) => [meta.leadSource as LeadSource, type as IntegrationType])
+);
 import {
   normalizePhoneNumber,
   getPhoneSearchVariations,
@@ -96,23 +105,18 @@ export async function ingestOrUpdateLead({
     },
   });
 
-  // 4. Update integration last sync stats
-  await prisma.integration.updateMany({
-    where: {
-      organizationId,
-      type:
-        source === LeadSource.META_ADS
-          ? IntegrationType.META_ADS
-          : source === LeadSource.WHATSAPP
-          ? IntegrationType.WHATSAPP
-          : IntegrationType.GOOGLE_SHEETS,
-    },
-    data: {
-      lastSyncAt: new Date(),
-      lastSyncStatus: "SUCCESS",
-      leadsImported: { increment: 1 },
-    },
-  });
+  // 4. Update integration last sync stats (only when this source maps to a channel)
+  const integrationType = LEAD_SOURCE_TO_INTEGRATION_TYPE[source];
+  if (integrationType) {
+    await prisma.integration.updateMany({
+      where: { organizationId, type: integrationType },
+      data: {
+        lastSyncAt: new Date(),
+        lastSyncStatus: "SUCCESS",
+        leadsImported: { increment: 1 },
+      },
+    });
+  }
 
   return {
     isNew: true,

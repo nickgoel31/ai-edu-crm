@@ -42,6 +42,7 @@ model Organization {
   slaPolicies             SLAPolicy[]
   pipelineTemplates       PipelineTemplate[]
   messageTemplates        MessageTemplate[]
+  knowledgeBases          KnowledgeBase[]
 
   @@map("organizations")
 }
@@ -69,26 +70,26 @@ model User {
 }
 
 model Lead {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   organizationId   String
   name             String
   phone            String
   email            String
   source           String
-  program          String?        // Optional specific program (e.g. "Data Science", "Electric Vehicle")
-  stage            String   @default("COLD")
-  pipelineStageId  String?        // Foreign key to dynamic PipelineStage
+  program          String? // Optional specific program (e.g. "Data Science", "Electric Vehicle")
+  stage            String    @default("COLD")
+  pipelineStageId  String? // Foreign key to dynamic PipelineStage
   lostReason       String?
   assignedToUserId String?
   score            Int?
-  scoreBreakdown   String?        // JSON string breakdown of contributing rules
-  slaDueBy         DateTime?      // Target response deadline computed on lead creation
-  firstContactAt   DateTime?      // Timestamp when first contact/activity was logged
-  slaBreached      Boolean        @default(false)
-  isArchived       Boolean        @default(false)
+  scoreBreakdown   String? // JSON string breakdown of contributing rules
+  slaDueBy         DateTime? // Target response deadline computed on lead creation
+  firstContactAt   DateTime? // Timestamp when first contact/activity was logged
+  slaBreached      Boolean   @default(false)
+  isArchived       Boolean   @default(false)
   archivedAt       DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignedTo    User?          @relation("AssignedLeads", fields: [assignedToUserId], references: [id], onDelete: SetNull)
@@ -106,23 +107,23 @@ model Lead {
 }
 
 model Student {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   leadId         String?
   name           String
   phone          String
   email          String
-  stage          String   @default("ENQUIRY")
+  stage          String    @default("ENQUIRY")
   program        String
   cohort         String
   branch         String?
   externalId     String?
   attendance     String?
   examResults    String?
-  isArchived     Boolean  @default(false)
+  isArchived     Boolean   @default(false)
   archivedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead          Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
@@ -169,25 +170,77 @@ model Payment {
 }
 
 model Agent {
-  id                String   @id @default(cuid())
-  organizationId    String
-  channel           String
-  role              String
-  category          String
-  name              String
-  status            String   @default("LIVE")
-  config            String
+  id                 String   @id @default(cuid())
+  organizationId     String
+  channel            String
+  role               String
+  category           String
+  name               String
+  status             String   @default("LIVE")
+  config             String
   outboundWebhookUrl String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  conversations Conversation[]
-  triggers      AgentTrigger[]
-  triggerFires  AgentTriggerFire[]
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations  Conversation[]
+  triggers       AgentTrigger[]
+  triggerFires   AgentTriggerFire[]
+  knowledgeBases AgentKnowledgeBase[]
 
   @@index([organizationId])
   @@map("agents")
+}
+
+// A reusable, org-wide knowledge source (FAQs, program info, policies).
+// Any agent in the org can be attached to any knowledge base — attachment is
+// a many-to-many join (AgentKnowledgeBase) so the same KB can back multiple
+// agents at once (e.g. the same "Programs & Fees" KB feeding both the
+// WhatsApp Lead Qualification agent and the Website Live Guide).
+model KnowledgeBase {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents    KnowledgeBaseDocument[]
+  agents       AgentKnowledgeBase[]
+
+  @@index([organizationId])
+  @@map("knowledge_bases")
+}
+
+model KnowledgeBaseDocument {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  title           String
+  sourceType      String   @default("TEXT") // "TEXT" | "URL"
+  content         String // raw text content, or the URL when sourceType = "URL"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeBaseId])
+  @@map("knowledge_base_documents")
+}
+
+model AgentKnowledgeBase {
+  id              String   @id @default(cuid())
+  agentId         String
+  knowledgeBaseId String
+  createdAt       DateTime @default(now())
+
+  agent         Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, knowledgeBaseId])
+  @@index([agentId])
+  @@index([knowledgeBaseId])
+  @@map("agent_knowledge_bases")
 }
 
 model AgentTrigger {
@@ -213,16 +266,16 @@ model AgentTrigger {
 // One row per (agentTrigger, entity) pair. Used both as the cooldown ledger
 // (lastTriggeredAt) and as the fire history shown on the Agent Automation tab.
 model AgentTriggerFire {
-  id             String   @id @default(cuid())
-  organizationId String
-  agentTriggerId String
-  agentId        String
-  entityType     String // "LEAD" | "STUDENT" | "CONVERSATION"
-  entityId       String
-  status         String   @default("SUCCESS") // "SUCCESS" | "FAILED" | "SKIPPED"
-  errorMessage   String?
+  id              String   @id @default(cuid())
+  organizationId  String
+  agentTriggerId  String
+  agentId         String
+  entityType      String // "LEAD" | "STUDENT" | "CONVERSATION"
+  entityId        String
+  status          String   @default("SUCCESS") // "SUCCESS" | "FAILED" | "SKIPPED"
+  errorMessage    String?
   lastTriggeredAt DateTime @default(now())
-  createdAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   agentTrigger AgentTrigger @relation(fields: [agentTriggerId], references: [id], onDelete: Cascade)
@@ -382,18 +435,18 @@ model NotificationPreference {
 model CustomFieldDefinition {
   id             String   @id @default(cuid())
   organizationId String
-  entityType     String   // "LEAD" | "STUDENT"
+  entityType     String // "LEAD" | "STUDENT"
   fieldKey       String
   label          String
-  fieldType      String   // "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN"
-  options        String?  // JSON string array for SELECT options e.g. ["Option 1", "Option 2"]
+  fieldType      String // "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN"
+  options        String? // JSON string array for SELECT options e.g. ["Option 1", "Option 2"]
   required       Boolean  @default(false)
   displayOrder   Int      @default(0)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   values       CustomFieldValue[]
 
   @@unique([organizationId, entityType, fieldKey])
@@ -405,10 +458,10 @@ model CustomFieldDefinition {
 model CustomFieldValue {
   id                String   @id @default(cuid())
   organizationId    String
-  entityType        String   // "LEAD" | "STUDENT"
-  entityId          String   // Lead ID or Student ID
+  entityType        String // "LEAD" | "STUDENT"
+  entityId          String // Lead ID or Student ID
   fieldDefinitionId String
-  value             String?  // Stored as string, cast on read
+  value             String? // Stored as string, cast on read
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -440,8 +493,8 @@ model Tag {
 model EntityTag {
   id             String   @id @default(cuid())
   organizationId String
-  entityType     String   // "LEAD" | "STUDENT"
-  entityId       String   // Lead ID or Student ID
+  entityType     String // "LEAD" | "STUDENT"
+  entityId       String // Lead ID or Student ID
   tagId          String
   createdAt      DateTime @default(now())
 
@@ -458,7 +511,7 @@ model EntityTag {
 model DuplicateMatch {
   id                String   @id @default(cuid())
   organizationId    String
-  entityType        String   // "LEAD" | "STUDENT"
+  entityType        String // "LEAD" | "STUDENT"
   primaryEntityId   String
   duplicateEntityId String
   matchedOn         String   @default("phone") // "phone" | "email"
@@ -479,10 +532,10 @@ model ScoringRule {
   id             String   @id @default(cuid())
   organizationId String
   name           String
-  field          String   // "source" | "stage" | "daysInCurrentStage" | "daysSinceLastActivity" | "hasReplied" | "hasConversations" | custom field key
-  operator       String   // "EQUALS" | "NOT_EQUALS" | "GREATER_THAN" | "LESS_THAN" | "CONTAINS"
-  value          String   // comparison target value
-  points         Int      // positive or negative points, e.g. +20, -15
+  field          String // "source" | "stage" | "daysInCurrentStage" | "daysSinceLastActivity" | "hasReplied" | "hasConversations" | custom field key
+  operator       String // "EQUALS" | "NOT_EQUALS" | "GREATER_THAN" | "LESS_THAN" | "CONTAINS"
+  value          String // comparison target value
+  points         Int // positive or negative points, e.g. +20, -15
   enabled        Boolean  @default(true)
   displayOrder   Int      @default(0)
   createdAt      DateTime @default(now())
@@ -498,8 +551,8 @@ model ScoringRule {
 model SLAPolicy {
   id                   String   @id @default(cuid())
   organizationId       String
-  source               String?  // null indicates org-wide default fallback SLA, or enum LeadSource string
-  respondWithinMinutes Int      // e.g. 15, 30, 60, 120, 240
+  source               String? // null indicates org-wide default fallback SLA, or enum LeadSource string
+  respondWithinMinutes Int // e.g. 15, 30, 60, 120, 240
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -511,16 +564,16 @@ model SLAPolicy {
 }
 
 model PipelineTemplate {
-  id             String          @id @default(cuid())
+  id             String   @id @default(cuid())
   organizationId String
-  name           String          // e.g. "Default Admissions Pipeline", "Vocational Diploma Pipeline"
-  program        String?         // null indicates default fallback template for leads without specific program
-  isDefault      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  name           String // e.g. "Default Admissions Pipeline", "Vocational Diploma Pipeline"
+  program        String? // null indicates default fallback template for leads without specific program
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  stages         PipelineStage[]
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages       PipelineStage[]
 
   @@unique([organizationId, program])
   @@index([organizationId])
@@ -528,18 +581,18 @@ model PipelineTemplate {
 }
 
 model PipelineStage {
-  id                   String           @id @default(cuid())
+  id                   String   @id @default(cuid())
   pipelineTemplateId   String
-  name                 String           // e.g. "Inbound Inquiry", "Document Verification", "Seat Blocked"
-  displayOrder         Int              @default(0)
-  color                String           @default("#3b82f6") // Hex color e.g. "#3b82f6"
-  requiresReasonOnExit Boolean          @default(false)     // If true, exiting this stage prompts for a reason
-  mapsToBucket         String           // "COLD" | "WARM" | "HOT" | "CONVERTING" | "LOST"
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  name                 String // e.g. "Inbound Inquiry", "Document Verification", "Seat Blocked"
+  displayOrder         Int      @default(0)
+  color                String   @default("#3b82f6") // Hex color e.g. "#3b82f6"
+  requiresReasonOnExit Boolean  @default(false) // If true, exiting this stage prompts for a reason
+  mapsToBucket         String // "COLD" | "WARM" | "HOT" | "CONVERTING" | "LOST"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  pipelineTemplate     PipelineTemplate @relation(fields: [pipelineTemplateId], references: [id], onDelete: Cascade)
-  leads                Lead[]
+  pipelineTemplate PipelineTemplate @relation(fields: [pipelineTemplateId], references: [id], onDelete: Cascade)
+  leads            Lead[]
 
   @@index([pipelineTemplateId])
   @@index([pipelineTemplateId, displayOrder])
@@ -550,13 +603,13 @@ model MessageTemplate {
   id             String   @id @default(cuid())
   organizationId String
   name           String
-  channel        String   // "EMAIL" | "SMS" | "WHATSAPP"
-  subject        String?  // Only for EMAIL channel
+  channel        String // "EMAIL" | "SMS" | "WHATSAPP"
+  subject        String? // Only for EMAIL channel
   body           String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, channel])
