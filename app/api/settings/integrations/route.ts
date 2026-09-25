@@ -1,8 +1,13 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { IntegrationType } from "@/types";
+
+function generateWebhookSecret(prefix: string): string {
+  return `whsec_${prefix}_${crypto.randomBytes(18).toString("base64url")}`;
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -43,9 +48,7 @@ export async function GET() {
       });
 
       if (!existing) {
-        const randomSecret = `whsec_${itype.toLowerCase().slice(0, 4)}_${Math.random()
-          .toString(36)
-          .substring(2, 10)}`;
+        const randomSecret = generateWebhookSecret(itype.toLowerCase().slice(0, 4));
 
         const defaultConfig =
           itype === IntegrationType.GOOGLE_SHEETS
@@ -129,7 +132,7 @@ export async function PATCH(req: Request) {
       create: {
         organizationId: orgId,
         type,
-        webhookSecret: webhookSecret?.trim() || `whsec_${Math.random().toString(36).slice(2, 10)}`,
+        webhookSecret: webhookSecret?.trim() || generateWebhookSecret(type.toLowerCase().slice(0, 4)),
         isEnabled: isEnabled !== undefined ? Boolean(isEnabled) : true,
         config: config ? (typeof config === "string" ? config : JSON.stringify(config)) : null,
       },

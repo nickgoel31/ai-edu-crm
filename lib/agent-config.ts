@@ -1,11 +1,8 @@
 import { AgentRole } from "@/types";
 import { getSecretFieldKeys } from "@/lib/agent-config-schemas";
-import { encryptField, decryptField } from "@/lib/crypto";
+import { encryptField, decryptField, SECRET_SET_SENTINEL } from "@/lib/crypto";
 
-// Sentinel the client sends back unchanged when a secret field was already
-// set and the user didn't retype it — never a real secret value, so it's
-// safe to compare against literally.
-export const SECRET_SET_SENTINEL = "__secret_already_set__";
+export { SECRET_SET_SENTINEL };
 
 export function parseAgentConfig(raw: string | null | undefined): Record<string, any> {
   if (!raw) return {};

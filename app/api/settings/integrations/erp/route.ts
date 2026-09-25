@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -9,6 +10,8 @@ import {
   DEFAULT_FIELD_MAPPING,
   AVAILABLE_CRM_FIELDS,
   syncStudentToErp,
+  maskErpConfigForClient,
+  resolveErpAuthHeaderForStorage,
 } from "@/lib/erp-sync";
 
 export async function GET(req: Request) {
@@ -48,7 +51,7 @@ export async function GET(req: Request) {
         lastSyncAt: integration.lastSyncAt,
         lastSyncStatus: integration.lastSyncStatus,
         lastError: integration.lastError,
-        config,
+        config: maskErpConfigForClient(config),
       },
       availableFields: AVAILABLE_CRM_FIELDS,
       defaultMapping: DEFAULT_FIELD_MAPPING,
@@ -103,17 +106,24 @@ export async function PATCH(req: Request) {
 
     const { integration, config } = await getErpIntegration(orgId);
 
+    let rawStoredConfig: any = {};
+    try {
+      rawStoredConfig = typeof integration.config === "string" ? JSON.parse(integration.config) : integration.config || {};
+    } catch {
+      rawStoredConfig = {};
+    }
+
     const updatedConfig = {
       ...config,
       ...(endpointUrl !== undefined ? { endpointUrl: endpointUrl.trim() } : {}),
-      ...(authHeader !== undefined ? { authHeader: authHeader.trim() } : {}),
+      authHeader: resolveErpAuthHeaderForStorage(rawStoredConfig.authHeader, authHeader),
       ...(externalIdField !== undefined ? { externalIdField: externalIdField.trim() || "externalId" } : {}),
       ...(fieldMapping !== undefined ? { fieldMapping } : {}),
     };
 
     let newSecret = integration.webhookSecret;
     if (regenerateToken) {
-      newSecret = `erp_tok_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+      newSecret = `erp_tok_${crypto.randomBytes(18).toString("base64url")}`;
     }
 
     const updatedIntegration = await prisma.integration.update({
@@ -147,7 +157,7 @@ export async function PATCH(req: Request) {
       success: true,
       integration: {
         ...updatedIntegration,
-        config: updatedConfig,
+        config: maskErpConfigForClient(updatedConfig),
       },
     });
   } catch (error: any) {

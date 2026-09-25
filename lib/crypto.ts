@@ -1,5 +1,11 @@
 import crypto from "crypto";
 
+// Sentinel a client sends back unchanged when a secret field was already set
+// and the user didn't retype it — never a real secret value, so it's safe
+// to compare against literally. Shared across agent config and integration
+// config so both masking flows behave identically.
+export const SECRET_SET_SENTINEL = "__secret_already_set__";
+
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit IV recommended for GCM
 const PREFIX = "enc:v1:";

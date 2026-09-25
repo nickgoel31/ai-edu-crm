@@ -27,6 +27,10 @@ import {
 import { transformStudentForErp } from "@/lib/erp-sync";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+// Kept as a plain string literal (not imported from lib/crypto) so this
+// client component never pulls Node's `crypto` module into the browser bundle.
+const SECRET_SET_SENTINEL = "__secret_already_set__";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -426,14 +430,29 @@ export default function ErpSettingsPage() {
                       <label className="block text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Authorization Header (Optional)
                       </label>
-                      <Input
-                        type="text"
-                        value={authHeader}
-                        onChange={(e) => setAuthHeader(e.target.value)}
-                        disabled={isReadonly}
-                        placeholder="Bearer sec_erp_token_xyz"
-                        className="font-mono text-xs"
-                      />
+                      {authHeader === SECRET_SET_SENTINEL ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 flex items-center gap-1.5 h-9 px-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-[11px] text-emerald-400">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Already configured (encrypted)</span>
+                          </div>
+                          {!isReadonly && (
+                            <Button type="button" variant="outline" size="sm" onClick={() => setAuthHeader("")}>
+                              Change
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Input
+                          type="password"
+                          value={authHeader}
+                          onChange={(e) => setAuthHeader(e.target.value)}
+                          disabled={isReadonly}
+                          placeholder="Bearer sec_erp_token_xyz"
+                          className="font-mono text-xs"
+                          autoComplete="off"
+                        />
+                      )}
                     </div>
 
                     <div className="space-y-1.5">

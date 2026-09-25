@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import {
   ErpSyncDirection,
@@ -6,6 +7,11 @@ import {
   PaymentStatus,
   StudentStage,
 } from "@/types";
+import { encryptField, decryptField, SECRET_SET_SENTINEL } from "@/lib/crypto";
+
+function generateWebhookToken(prefix: string): string {
+  return `${prefix}_${crypto.randomBytes(18).toString("base64url")}`;
+}
 
 export interface ErpIntegrationConfig {
   endpointUrl: string;
@@ -59,7 +65,7 @@ export async function getErpIntegration(organizationId: string) {
 
   if (!integration) {
     // Generate a default webhook secret/token for inbound sync
-    const token = `erp_tok_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+    const token = generateWebhookToken("erp_tok");
     integration = await prisma.integration.create({
       data: {
         organizationId,
@@ -84,9 +90,12 @@ export async function getErpIntegration(organizationId: string) {
     rawConfig = {};
   }
 
+  // authHeader carries an outbound Authorization value (e.g. "Bearer sk_live_...")
+  // for the org's ERP API — encrypted at rest via lib/crypto.ts, same as agent
+  // secrets. decryptField transparently passes through legacy plaintext rows.
   const config: ErpIntegrationConfig = {
     endpointUrl: rawConfig.endpointUrl || "",
-    authHeader: rawConfig.authHeader || "",
+    authHeader: decryptField(rawConfig.authHeader) || "",
     externalIdField: rawConfig.externalIdField || "externalId",
     fieldMapping: rawConfig.fieldMapping || DEFAULT_FIELD_MAPPING,
     syncOnEnrolled: rawConfig.syncOnEnrolled !== false,
@@ -96,6 +105,31 @@ export async function getErpIntegration(organizationId: string) {
     integration,
     config,
   };
+}
+
+/** Config safe to send to the client: authHeader is replaced with a sentinel if set. */
+export function maskErpConfigForClient(config: ErpIntegrationConfig): ErpIntegrationConfig {
+  return {
+    ...config,
+    authHeader: config.authHeader ? SECRET_SET_SENTINEL : "",
+  };
+}
+
+/**
+ * Resolves the authHeader value to persist: encrypts a freshly-typed value,
+ * or keeps the existing raw (still-encrypted) stored value when the client
+ * sent the sentinel back unchanged or nothing at all. `rawStoredAuthHeader`
+ * must come from the *raw* integration.config JSON, not the decrypted
+ * config `getErpIntegration` returns.
+ */
+export function resolveErpAuthHeaderForStorage(
+  rawStoredAuthHeader: string | undefined,
+  incoming: string | undefined
+): string | undefined {
+  if (incoming === undefined || incoming === SECRET_SET_SENTINEL || incoming.trim() === "") {
+    return rawStoredAuthHeader;
+  }
+  return encryptField(incoming.trim()) || undefined;
 }
 
 /**

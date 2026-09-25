@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { IntegrationType, INTEGRATION_TYPE_META } from "@/types";
 import { ingestOrUpdateLead, resolveTenantFromWebhook } from "@/lib/lead-ingestion";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import {
+  parseCallTrackingPayload,
+  parseIndiaMartPayload,
+  parseLinkedInLeadGenPayload,
+  parseGoogleAdsLeadFormPayload,
+  type ParsedLead,
+} from "@/lib/webhook-parsers";
 
 // A single generic inbound-lead webhook shared by every "simple" channel —
 // GOOGLE_ADS, WEBSITE_FORM, CALL_TRACKING, LINKEDIN_LEAD_GEN, ZAPIER,
@@ -31,6 +38,15 @@ function firstDefined(body: Record<string, any>, keys: string[]): string | undef
   return undefined;
 }
 
+// Providers with a real, documented payload shape get a dedicated parser
+// instead of the generic name/phone/email field guesser below.
+const PROVIDER_PARSERS: Partial<Record<string, (body: Record<string, any>) => ParsedLead>> = {
+  [IntegrationType.CALL_TRACKING]: parseCallTrackingPayload,
+  [IntegrationType.INDIAMART]: parseIndiaMartPayload,
+  [IntegrationType.LINKEDIN_LEAD_GEN]: parseLinkedInLeadGenPayload,
+  [IntegrationType.GOOGLE_ADS]: parseGoogleAdsLeadFormPayload,
+};
+
 export async function GET(req: Request, { params }: { params: { type: string } }) {
   // Simple health-check / verification endpoint some connectors (e.g. LinkedIn) ping.
   const type = params.type?.toUpperCase();
@@ -54,16 +70,23 @@ export async function POST(req: Request, { params }: { params: { type: string } 
 
     const body = await req.json().catch(() => ({}));
 
-    const name = firstDefined(body, ["name", "fullName", "full_name", "contactName", "customerName"]) || "New Inbound Lead";
-    const phone = firstDefined(body, ["phone", "phoneNumber", "phone_number", "mobile", "contactNumber", "senderPhone"]);
-    const email = firstDefined(body, ["email", "emailAddress", "email_address"]);
-    const message =
-      firstDefined(body, ["message", "notes", "enquiry", "comments", "requirement"]) || undefined;
-    const program = firstDefined(body, ["program", "course", "courseInterest", "product"]);
+    const parser = PROVIDER_PARSERS[type];
+    const parsed: ParsedLead = parser
+      ? parser(body)
+      : {
+          name: firstDefined(body, ["name", "fullName", "full_name", "contactName", "customerName"]) || "New Inbound Lead",
+          phone: firstDefined(body, ["phone", "phoneNumber", "phone_number", "mobile", "contactNumber", "senderPhone"]),
+          email: firstDefined(body, ["email", "emailAddress", "email_address"]),
+          message: firstDefined(body, ["message", "notes", "enquiry", "comments", "requirement"]),
+          program: firstDefined(body, ["program", "course", "courseInterest", "product"]),
+          metadata: { provider: "generic" },
+        };
+
+    const { name, phone, email, message, program, metadata } = parsed;
 
     if (!phone) {
       return NextResponse.json(
-        { error: "Missing required field: phone (or phoneNumber/mobile/contactNumber)." },
+        { error: "Missing required field: phone (or the provider's equivalent caller/contact number field)." },
         { status: 400 }
       );
     }
@@ -77,7 +100,7 @@ export async function POST(req: Request, { params }: { params: { type: string } 
       phone,
       email,
       score: 55,
-      metadata: { channel: type, program, raw: body },
+      metadata: { channel: type, program, ...metadata, raw: body },
       notes: message ? `${meta.label}: "${message}"` : `Inbound lead via ${meta.label}.`,
     });
 
