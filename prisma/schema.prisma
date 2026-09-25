@@ -318,6 +318,25 @@ model Conversation {
   @@map("conversations")
 }
 
+// Durable retry queue for work that must not be silently dropped on a
+// transient failure — currently lead ingestion and agent trigger webhook
+// calls. Processed by /api/cron/process-jobs with exponential backoff.
+model Job {
+  id          String   @id @default(cuid())
+  type        String
+  payload     String
+  status      String   @default("PENDING") // PENDING | PROCESSING | SUCCEEDED | FAILED
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  nextRunAt   DateTime @default(now())
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, nextRunAt])
+  @@map("jobs")
+}
+
 model AuditLog {
   id             String   @id @default(cuid())
   organizationId String

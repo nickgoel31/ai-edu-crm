@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activity";
+import { enqueueJob } from "@/lib/job-queue";
 import {
   AgentTriggerEvent,
   ActivityType,
@@ -168,7 +169,7 @@ async function findMatchesForTrigger(
   }
 }
 
-async function callAgentWebhook(
+export async function callAgentWebhook(
   webhookUrl: string,
   payload: Record<string, any>
 ): Promise<{ ok: boolean; error?: string }> {
@@ -284,6 +285,27 @@ export async function evaluateAgentTriggers(params: {
           status = "FAILED";
           errorMessage = result.error || "Unknown webhook error";
           report.failed++;
+
+          // Don't let a transient failure (agent's endpoint down, network
+          // blip) silently drop this fire — queue it for background retry
+          // with backoff instead of only recording FAILED and moving on.
+          await enqueueJob("AGENT_TRIGGER_RETRY", {
+            agentTriggerId: trigger.id,
+            entityType: match.entityType,
+            entityId: match.entityId,
+            webhookUrl: trigger.agent.outboundWebhookUrl,
+            webhookPayload: {
+              agentId: trigger.agent.id,
+              agentName: trigger.agent.name,
+              agentRole: trigger.agent.role,
+              triggerEvent: trigger.triggerEvent,
+              entityType: match.entityType,
+              entityId: match.entityId,
+              contactName: match.name,
+              phone: match.phone,
+              conditions,
+            },
+          });
         }
       }
 

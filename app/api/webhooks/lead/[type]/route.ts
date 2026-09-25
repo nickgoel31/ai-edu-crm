@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { IntegrationType, INTEGRATION_TYPE_META } from "@/types";
 import { ingestOrUpdateLead, resolveTenantFromWebhook } from "@/lib/lead-ingestion";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { enqueueJob } from "@/lib/job-queue";
 import {
   parseCallTrackingPayload,
   parseIndiaMartPayload,
@@ -93,7 +94,7 @@ export async function POST(req: Request, { params }: { params: { type: string } 
 
     const meta = INTEGRATION_TYPE_META[type as IntegrationType];
 
-    const result = await ingestOrUpdateLead({
+    const ingestParams = {
       organizationId,
       source: meta.leadSource!,
       name,
@@ -102,14 +103,28 @@ export async function POST(req: Request, { params }: { params: { type: string } 
       score: 55,
       metadata: { channel: type, program, ...metadata, raw: body },
       notes: message ? `${meta.label}: "${message}"` : `Inbound lead via ${meta.label}.`,
-    });
+    };
 
-    return NextResponse.json({
-      success: true,
-      leadId: result.lead.id,
-      duplicateDetected: !!result.duplicateMatch,
-      message: result.message,
-    });
+    try {
+      const result = await ingestOrUpdateLead(ingestParams);
+      return NextResponse.json({
+        success: true,
+        leadId: result.lead.id,
+        duplicateDetected: !!result.duplicateMatch,
+        message: result.message,
+      });
+    } catch (ingestError: any) {
+      // The webhook was authenticated and well-formed — this is a
+      // transient failure (DB hiccup, etc), not a bad request, so don't
+      // drop the lead: queue it for background retry with backoff on top
+      // of whatever retry the sender itself does.
+      console.error(`Lead ingestion failed for ${type}, queuing retry:`, ingestError);
+      await enqueueJob("LEAD_INGESTION_RETRY", ingestParams);
+      return NextResponse.json(
+        { error: "Failed to save the lead immediately; queued for automatic retry.", queued: true },
+        { status: 202 }
+      );
+    }
   } catch (error: any) {
     console.error(`Error processing ${params.type} webhook:`, error);
     const status = /token/i.test(error?.message || "") ? 401 : 500;
