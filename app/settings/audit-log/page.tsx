@@ -122,49 +122,10 @@ export default function AuditLogPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // CSV Export
+  // Full-history CSV export (server-side, up to 100k rows) — not just the
+  // currently paginated page of `logs`, which is what this used to export.
   const handleExportCSV = () => {
-    if (logs.length === 0) return;
-
-    const headers = [
-      "Log ID",
-      "Timestamp",
-      "Actor Name",
-      "Actor Email",
-      "Actor Role",
-      "Action",
-      "Entity Type",
-      "Entity ID",
-      "Details / Diff",
-    ];
-
-    const rows = logs.map((log) => {
-      const detailsStr = log.changesJson ? JSON.stringify(log.changesJson).replace(/"/g, '""') : "";
-      return [
-        log.id,
-        new Date(log.createdAt).toISOString(),
-        `"${(log.user?.name || "System Automated").replace(/"/g, '""')}"`,
-        `"${(log.user?.email || "system@internal").replace(/"/g, '""')}"`,
-        log.user?.role || "SYSTEM",
-        log.action,
-        log.entityType,
-        log.entityId,
-        `"${detailsStr}"`,
-      ];
-    });
-
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `audit-logs-export-${new Date().toISOString().slice(0, 10)}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = "/api/settings/audit-logs/export?format=csv";
   };
 
   // RBAC Access Restriction View for Non-Admins

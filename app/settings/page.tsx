@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare } from "lucide-react";
+import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function SettingsPage() {
@@ -242,6 +242,48 @@ export default function SettingsPage() {
                 </div>
               </div>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/security" className="group block">
+          <Card className="hover:ring-rose-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Security
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Two-factor authentication and account security settings
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/data-privacy" className="group block">
+          <Card className="hover:ring-cyan-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 group-hover:bg-cyan-600 group-hover:text-white transition-colors">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Data & Privacy
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Export or permanently erase your organization's lead/student data (GDPR/DPDP, ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" />
             </CardContent>
           </Card>
         </Link>
