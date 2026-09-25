@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   ChevronDown,
@@ -21,6 +21,9 @@ import {
   BookOpen,
   LogOut,
   UserCog,
+  CalendarDays,
+  CalendarCheck2,
+  Building,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,8 +41,6 @@ import {
 
 const STORAGE_KEYS = {
   collapsed: "sidebar:collapsed",
-  leadsExpanded: "sidebar:leadsExpanded",
-  studentsExpanded: "sidebar:studentsExpanded",
 };
 
 function readStoredBool(key: string, fallback: boolean): boolean {
@@ -64,7 +65,7 @@ function writeStoredBool(key: string, value: boolean) {
 
 // ── Color treatment per module — kept as static class strings so Tailwind's
 //    JIT scanner can pick them up (no dynamic `bg-${color}-500` interpolation). ──
-type AccentColor = "blue" | "violet" | "rose" | "indigo" | "cyan" | "teal" | "orange";
+type AccentColor = "blue" | "violet" | "rose" | "indigo" | "cyan" | "teal" | "orange" | "amber" | "sky" | "emerald";
 
 const ACCENT_STYLES: Record<
   AccentColor,
@@ -112,15 +113,25 @@ const ACCENT_STYLES: Record<
     dot: "bg-orange-600 dark:bg-orange-400 shadow-[0_0_5px_rgba(249,115,22,0.5)]",
     dotIdle: "bg-zinc-400/60 dark:bg-zinc-700",
   },
+  amber: {
+    badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25",
+    bar: "bg-amber-500",
+    dot: "bg-amber-600 dark:bg-amber-400 shadow-[0_0_5px_rgba(245,158,11,0.5)]",
+    dotIdle: "bg-zinc-400/60 dark:bg-zinc-700",
+  },
+  sky: {
+    badge: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/25",
+    bar: "bg-sky-500",
+    dot: "bg-sky-600 dark:bg-sky-400 shadow-[0_0_5px_rgba(14,165,233,0.5)]",
+    dotIdle: "bg-zinc-400/60 dark:bg-zinc-700",
+  },
+  emerald: {
+    badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+    bar: "bg-emerald-500",
+    dot: "bg-emerald-600 dark:bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.5)]",
+    dotIdle: "bg-zinc-400/60 dark:bg-zinc-700",
+  },
 };
-
-interface NavSubItem {
-  name: string;
-  href: string;
-  stageParam?: string;
-  viewParam?: string;
-  tabParam?: string;
-}
 
 interface NavItem {
   id: string;
@@ -130,28 +141,11 @@ interface NavItem {
   color: AccentColor;
   /** Whether this item's row/badge should render as active for the given pathname. */
   matcher: (pathname: string | null) => boolean;
-  /** Expandable tree of query-param-driven sub-views (Leads/Students). */
-  subItems?: NavSubItem[];
-}
-
-function isSubItemActive(
-  sub: NavSubItem,
-  pathname: string | null,
-  parentHref: string,
-  currentStage: string | null,
-  currentView: string | null,
-  currentTab: string | null
-): boolean {
-  if (pathname !== parentHref) return false;
-  if (sub.stageParam) return currentStage === sub.stageParam;
-  if (sub.viewParam) return currentView === sub.viewParam;
-  if (sub.tabParam) return currentTab === sub.tabParam;
-  return !currentStage && !currentView && !currentTab;
 }
 
 export function Sidebar() {
   return (
-    <Suspense fallback={<div className="hidden md:flex w-60 bg-background h-screen border-r border-border" />}>
+    <Suspense fallback={<div className="hidden md:flex w-60 bg-sidebar h-screen border-r border-sidebar-border" />}>
       <SidebarContent />
     </Suspense>
   );
@@ -159,57 +153,20 @@ export function Sidebar() {
 
 function SidebarContent() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
 
-  // Collapsed / expanded tree state — persisted to localStorage (SSR-safe defaults).
+  // Collapsed state — persisted to localStorage (SSR-safe default).
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [leadsExpanded, setLeadsExpanded] = useState(true);
-  const [studentsExpanded, setStudentsExpanded] = useState(true);
-  const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
     setIsCollapsed(readStoredBool(STORAGE_KEYS.collapsed, false));
-    setLeadsExpanded(readStoredBool(STORAGE_KEYS.leadsExpanded, true));
-    setStudentsExpanded(readStoredBool(STORAGE_KEYS.studentsExpanded, true));
-    setHasHydrated(true);
   }, []);
 
   const toggleCollapsed = useCallback((next: boolean) => {
     setIsCollapsed(next);
     writeStoredBool(STORAGE_KEYS.collapsed, next);
   }, []);
-
-  const toggleLeadsExpanded = useCallback(() => {
-    setLeadsExpanded((prev) => {
-      const next = !prev;
-      writeStoredBool(STORAGE_KEYS.leadsExpanded, next);
-      return next;
-    });
-  }, []);
-
-  const toggleStudentsExpanded = useCallback(() => {
-    setStudentsExpanded((prev) => {
-      const next = !prev;
-      writeStoredBool(STORAGE_KEYS.studentsExpanded, next);
-      return next;
-    });
-  }, []);
-
-  // Automatically expand tree if current path matches
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (pathname?.startsWith("/leads") && !leadsExpanded) {
-      setLeadsExpanded(true);
-      writeStoredBool(STORAGE_KEYS.leadsExpanded, true);
-    }
-    if (pathname?.startsWith("/students") && !studentsExpanded) {
-      setStudentsExpanded(true);
-      writeStoredBool(STORAGE_KEYS.studentsExpanded, true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, hasHydrated]);
 
   const organizationName = session?.user?.organizationName || "Workspace";
   const userName = session?.user?.name || "harsh";
@@ -225,10 +182,6 @@ function SidebarContent() {
         .slice(0, 2)
     : initial;
 
-  const currentStage = searchParams?.get("stage") ?? null;
-  const currentView = searchParams?.get("view") ?? null;
-  const currentTab = searchParams?.get("tab") ?? null;
-
   // ── Single typed nav-config array — drives all render + active-state logic. ──
   const navItems: NavItem[] = [
     {
@@ -238,15 +191,6 @@ function SidebarContent() {
       icon: Building2,
       color: "blue",
       matcher: (p) => !!p?.startsWith("/leads"),
-      subItems: [
-        { name: "Kanban Pipeline", href: "/leads", viewParam: "kanban" },
-        { name: "Table View", href: "/leads?view=table", viewParam: "table" },
-        { name: "Cold Leads", href: "/leads?stage=COLD", stageParam: "COLD" },
-        { name: "Warm Leads", href: "/leads?stage=WARM", stageParam: "WARM" },
-        { name: "Hot Inquiries", href: "/leads?stage=HOT", stageParam: "HOT" },
-        { name: "Converting", href: "/leads?stage=CONVERTING", stageParam: "CONVERTING" },
-        { name: "Lost / Closed", href: "/leads?stage=LOST", stageParam: "LOST" },
-      ],
     },
     {
       id: "students",
@@ -255,14 +199,6 @@ function SidebarContent() {
       icon: Users,
       color: "violet",
       matcher: (p) => !!p?.startsWith("/students"),
-      subItems: [
-        { name: "All Students", href: "/students" },
-        { name: "Enrolled", href: "/students?stage=ENROLLED", stageParam: "ENROLLED" },
-        { name: "Active Learners", href: "/students?stage=ACTIVE", stageParam: "ACTIVE" },
-        { name: "Alumni", href: "/students?stage=ALUMNI", stageParam: "ALUMNI" },
-        { name: "Document Checklist", href: "/students?tab=documents", tabParam: "documents" },
-        { name: "Fee Installments", href: "/students?tab=payments", tabParam: "payments" },
-      ],
     },
     {
       id: "agents",
@@ -279,6 +215,30 @@ function SidebarContent() {
       icon: BookOpen,
       color: "indigo",
       matcher: (p) => !!p?.startsWith("/knowledge-base"),
+    },
+    {
+      id: "batches",
+      href: "/batches",
+      label: "Batches",
+      icon: CalendarDays,
+      color: "amber",
+      matcher: (p) => !!p?.startsWith("/batches"),
+    },
+    {
+      id: "bookings",
+      href: "/bookings",
+      label: "Demo Bookings",
+      icon: CalendarCheck2,
+      color: "sky",
+      matcher: (p) => !!p?.startsWith("/bookings"),
+    },
+    {
+      id: "franchise",
+      href: "/franchise",
+      label: "Franchise",
+      icon: Building,
+      color: "emerald",
+      matcher: (p) => !!p?.startsWith("/franchise"),
     },
     {
       id: "reports",
@@ -314,7 +274,6 @@ function SidebarContent() {
     const isActive = item.matcher(pathname);
     const accent = ACCENT_STYLES[item.color];
     const Icon = item.icon;
-    const hasTree = !!item.subItems?.length;
 
     const iconBadge = (
       <div
@@ -329,18 +288,8 @@ function SidebarContent() {
 
     const row = (
       <div
-        onClick={
-          hasTree
-            ? () => {
-                if (isCollapsed) toggleCollapsed(false);
-                if (item.id === "leads") toggleLeadsExpanded();
-                if (item.id === "students") toggleStudentsExpanded();
-              }
-            : undefined
-        }
         className={cn(
           "group relative flex items-center justify-between px-2.5 py-[7px] rounded-lg text-[13px] transition-colors duration-150",
-          hasTree ? "cursor-pointer" : "",
           isActive
             ? "text-foreground bg-muted/70 border border-border/60"
             : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -352,32 +301,10 @@ function SidebarContent() {
 
         <div className="flex items-center gap-2.5 min-w-0">
           {iconBadge}
-          {!isCollapsed &&
-            (hasTree ? (
-              <Link
-                href={item.href}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  "truncate text-[13px] font-medium",
-                  isActive ? "text-foreground font-semibold" : "text-foreground/80 group-hover:text-foreground"
-                )}
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <span className={cn("truncate font-medium", isActive && "font-semibold")}>{item.label}</span>
-            ))}
+          {!isCollapsed && (
+            <span className={cn("truncate font-medium", isActive && "font-semibold")}>{item.label}</span>
+          )}
         </div>
-
-        {!isCollapsed && hasTree && (
-          <ChevronRight
-            className={cn(
-              "w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 shrink-0",
-              item.id === "leads" && leadsExpanded && "rotate-90",
-              item.id === "students" && studentsExpanded && "rotate-90"
-            )}
-          />
-        )}
 
         {!isCollapsed && item.id === "settings" && (
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground transition-colors shrink-0" />
@@ -385,12 +312,10 @@ function SidebarContent() {
       </div>
     );
 
-    const wrapped = !hasTree ? (
+    const wrapped = (
       <Link href={item.href} className="block">
         {row}
       </Link>
-    ) : (
-      row
     );
 
     const withTooltip = isCollapsed ? (
@@ -402,48 +327,13 @@ function SidebarContent() {
       wrapped
     );
 
-    const expanded = item.id === "leads" ? leadsExpanded : item.id === "students" ? studentsExpanded : false;
-
-    return (
-      <div key={item.id}>
-        {withTooltip}
-
-        {hasTree && !isCollapsed && expanded && (
-          <div className="relative ml-[22px] pl-3 border-l border-border my-0.5 space-y-0.5">
-            {item.subItems!.map((sub) => {
-              const active = isSubItemActive(sub, pathname, item.href, currentStage, currentView, currentTab);
-              return (
-                <Link
-                  key={sub.name}
-                  href={sub.href}
-                  className={cn(
-                    "relative flex items-center gap-2 py-[5px] px-2 rounded-md text-[12px] transition-colors duration-150",
-                    "before:absolute before:-left-[13px] before:top-1/2 before:w-2.5 before:h-px before:bg-border",
-                    active
-                      ? "text-foreground font-medium bg-muted border border-border/60"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0 transition-all",
-                      active ? accent.dot : accent.dotIdle
-                    )}
-                  />
-                  <span className="truncate">{sub.name}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
+    return <div key={item.id}>{withTooltip}</div>;
   };
 
   return (
     <aside
       className={cn(
-        "hidden md:flex flex-col bg-background text-foreground border-r border-border h-screen sticky top-0 shrink-0 transition-all duration-300 select-none z-30 font-sans",
+        "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0 shrink-0 transition-all duration-300 select-none z-30 font-sans",
         isCollapsed ? "w-[56px]" : "w-60"
       )}
     >

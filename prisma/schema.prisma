@@ -34,6 +34,22 @@ model Organization {
   ssoIssuer     String?
   ssoCert       String?
 
+  // Multi-branch / franchise white-labelling. A branch org has
+  // parentOrganizationId set to its franchise HQ; the HQ (parent) sees a
+  // roll-up across every branch (lib/vendor-admin.ts-style aggregation, see
+  // app/franchise/page.tsx), while each branch only ever sees its own data
+  // through the normal scoped-prisma tenant isolation.
+  parentOrganizationId String?
+  brandLogoUrl         String?
+  brandPrimaryColor    String? // hex, e.g. "#2563eb" — applied as --primary-brand on the branch's login/portal pages
+  // UPI VPA (e.g. "coaching@okhdfcbank") fee reminders and referral payouts
+  // build upi://pay deep links against. Optional — features degrade to a
+  // plain payment-link placeholder when unset.
+  upiVpa               String?
+
+  parentOrganization Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
+  branches           Organization[] @relation("OrgHierarchy")
+
   users                   User[]
   leads                   Lead[]
   students                Student[]
@@ -56,17 +72,24 @@ model Organization {
   pipelineTemplates       PipelineTemplate[]
   messageTemplates        MessageTemplate[]
   knowledgeBases          KnowledgeBase[]
+  batches                 Batch[]
+  classAttendance         ClassAttendance[]
+  guardians               Guardian[]
+  demoSlots               DemoSlot[]
+  demoBookings            DemoBooking[]
+  referralPayouts         ReferralPayout[]
+  broadcastCampaigns      BroadcastCampaign[]
 
   @@map("organizations")
 }
 
 model User {
-  id             String   @id @default(cuid())
-  organizationId String
-  email          String
-  password       String
-  role           String   @default("COUNSELOR")
-  name           String?
+  id                   String   @id @default(cuid())
+  organizationId       String
+  email                String
+  password             String
+  role                 String   @default("COUNSELOR")
+  name                 String?
   // TOTP two-factor auth. Secret is encrypted at rest (lib/crypto.ts);
   // backupCodes is a JSON array of bcrypt hashes, each single-use.
   twoFactorSecret      String?
@@ -76,9 +99,9 @@ model User {
   // Null = full access to every module their role can otherwise reach
   // (today's default behavior, unchanged for every existing user).
   // ADMIN is never restricted by this — see lib/rbac.ts.
-  moduleAccess   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  moduleAccess         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignedLeads          Lead[]                  @relation("AssignedLeads")
@@ -86,6 +109,7 @@ model User {
   activities             Activity[]
   claimedConversations   Conversation[]          @relation("ClaimedConversations")
   notificationPreference NotificationPreference?
+  facultyBatches         Batch[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -111,14 +135,21 @@ model Lead {
   slaBreached      Boolean   @default(false)
   isArchived       Boolean   @default(false)
   archivedAt       DateTime?
+  // DLT/opt-in consent for WhatsApp broadcast campaigns (see
+  // lib/broadcast.ts) — separate from ordinary 1:1 agent conversations,
+  // which don't require marketing opt-in under Indian DLT rules.
+  whatsappOptIn    Boolean   @default(false)
+  whatsappOptInAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignedTo    User?          @relation("AssignedLeads", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  pipelineStage PipelineStage? @relation(fields: [pipelineStageId], references: [id], onDelete: SetNull)
-  students      Student[]
-  conversations Conversation[]
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTo      User?            @relation("AssignedLeads", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  pipelineStage   PipelineStage?   @relation(fields: [pipelineStageId], references: [id], onDelete: SetNull)
+  students        Student[]
+  conversations   Conversation[]
+  demoBookings    DemoBooking[]
+  referralPayouts ReferralPayout[] @relation("ReferredLead")
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -130,34 +161,48 @@ model Lead {
 }
 
 model Student {
-  id             String    @id @default(cuid())
-  organizationId String
-  leadId         String?
-  name           String
-  phone          String
-  email          String
-  stage          String    @default("ENQUIRY")
-  program        String
-  cohort         String
-  branch         String?
-  externalId     String?
-  attendance     String?
-  examResults    String?
-  isArchived     Boolean   @default(false)
-  archivedAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  organizationId     String
+  leadId             String?
+  batchId            String?
+  name               String
+  phone              String
+  email              String
+  stage              String    @default("ENQUIRY")
+  program            String
+  cohort             String
+  branch             String?
+  externalId         String?
+  attendance         String?
+  examResults        String?
+  isArchived         Boolean   @default(false)
+  archivedAt         DateTime?
+  whatsappOptIn      Boolean   @default(false)
+  whatsappOptInAt    DateTime?
+  // Dropout/churn-risk scoring (lib/churn-scoring.ts) — same rule-based
+  // pattern as Lead.score/scoreBreakdown, but for already-enrolled students:
+  // attendance decline, payment overdue, low test scores, etc.
+  churnRiskScore     Int?
+  churnRiskFactors   String? // JSON breakdown, same shape as Lead.scoreBreakdown
+  churnRiskUpdatedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead          Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  documents     Document[]
-  payments      Payment[]
-  conversations Conversation[]
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead                Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  batch               Batch?            @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  documents           Document[]
+  payments            Payment[]
+  conversations       Conversation[]
+  guardians           Guardian[]
+  attendanceRecords   ClassAttendance[]
+  referralPayoutsMade ReferralPayout[]  @relation("ReferrerStudent")
 
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([organizationId, externalId])
   @@index([organizationId, isArchived])
+  @@index([organizationId, batchId])
   @@map("students")
 }
 
@@ -656,4 +701,169 @@ model MessageTemplate {
   @@index([organizationId])
   @@index([organizationId, channel])
   @@map("message_templates")
+}
+
+// ── Batch & timetable management (feature 5) ──────────────────────────────
+model Batch {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String // e.g. "Data Science - Evening Batch A"
+  program        String
+  facultyUserId  String?
+  startDate      DateTime
+  endDate        DateTime?
+  scheduleDays   String // JSON string array, e.g. ["MON","WED","FRI"]
+  scheduleTime   String? // e.g. "18:00-19:30"
+  capacity       Int?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  faculty           User?             @relation(fields: [facultyUserId], references: [id], onDelete: SetNull)
+  students          Student[]
+  attendanceRecords ClassAttendance[]
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+  @@map("batches")
+}
+
+model ClassAttendance {
+  id             String   @id @default(cuid())
+  organizationId String
+  batchId        String
+  studentId      String
+  date           DateTime
+  status         String   @default("PRESENT") // "PRESENT" | "ABSENT" | "LATE"
+  markedByUserId String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batch        Batch        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, studentId, date])
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([batchId, date])
+  @@map("class_attendance")
+}
+
+// ── Parent/Guardian portal (feature 3) ────────────────────────────────────
+// A separate, lightweight credential — not a User row — scoped to exactly
+// one Student. Authenticated through a dedicated NextAuth provider
+// (lib/auth.ts "guardian-credentials") so a guardian session is clearly
+// distinguishable from a staff session and can never reach staff-only APIs.
+model Guardian {
+  id             String   @id @default(cuid())
+  organizationId String
+  studentId      String
+  name           String
+  email          String
+  phone          String?
+  password       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([studentId])
+  @@map("guardians")
+}
+
+// ── Free demo-class booking (feature 8) ───────────────────────────────────
+model DemoSlot {
+  id             String   @id @default(cuid())
+  organizationId String
+  startTime      DateTime
+  endTime        DateTime
+  capacity       Int      @default(1)
+  bookedCount    Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookings     DemoBooking[]
+
+  @@index([organizationId])
+  @@index([organizationId, startTime])
+  @@map("demo_slots")
+}
+
+model DemoBooking {
+  id             String   @id @default(cuid())
+  organizationId String
+  demoSlotId     String
+  leadId         String?
+  name           String
+  phone          String
+  email          String?
+  program        String?
+  status         String   @default("SCHEDULED") // "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW"
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  demoSlot     DemoSlot     @relation(fields: [demoSlotId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([demoSlotId])
+  @@map("demo_bookings")
+}
+
+// ── Referral payout automation (feature 7) ────────────────────────────────
+model ReferralPayout {
+  id                String    @id @default(cuid())
+  organizationId    String
+  referrerStudentId String?
+  referrerName      String
+  referrerPhone     String
+  referredLeadId    String?
+  amount            Float
+  status            String    @default("PENDING") // "PENDING" | "PAID" | "CANCELLED"
+  upiVpa            String?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  referrerStudent Student?     @relation("ReferrerStudent", fields: [referrerStudentId], references: [id], onDelete: SetNull)
+  referredLead    Lead?        @relation("ReferredLead", fields: [referredLeadId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("referral_payouts")
+}
+
+// ── Admissions-season WhatsApp broadcasts (feature 6) ─────────────────────
+model BroadcastCampaign {
+  id              String    @id @default(cuid())
+  organizationId  String
+  name            String
+  channel         String    @default("WHATSAPP")
+  templateMessage String
+  segmentType     String // "LEADS" | "STUDENTS"
+  segmentFilter   String? // JSON filter, e.g. { "stage": "COLD" }
+  status          String    @default("DRAFT") // "DRAFT" | "SENDING" | "SENT" | "FAILED"
+  totalRecipients Int       @default(0)
+  sentCount       Int       @default(0)
+  failedCount     Int       @default(0)
+  optedOutSkipped Int       @default(0)
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("broadcast_campaigns")
 }

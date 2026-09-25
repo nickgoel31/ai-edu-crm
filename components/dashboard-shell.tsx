@@ -9,7 +9,11 @@ import { TrialBanner } from "@/components/trial-banner";
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthRoute = pathname === "/login" || pathname === "/register";
-  const isPublicRoute = isAuthRoute || pathname?.startsWith("/widget/");
+  const isPublicRoute =
+    isAuthRoute ||
+    pathname?.startsWith("/widget/") ||
+    pathname?.startsWith("/book/") ||
+    pathname?.startsWith("/portal");
 
   if (isPublicRoute) {
     return <>{children}</>;

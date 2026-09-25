@@ -1,7 +1,33 @@
 import { prisma } from "@/lib/prisma";
-import { AgentRole, AGENT_ROLE_META } from "@/types";
+import { AgentRole, AGENT_ROLE_META, SUPPORTED_LANGUAGES } from "@/types";
 
 const MAX_KNOWLEDGE_CHARS = 12000;
+
+/**
+ * Turns a stored language code (e.g. "hi-IN", "hi-Latn") into an explicit,
+ * directive instruction for the LLM — not just a raw code, which models tend
+ * to treat as a weak hint rather than a hard requirement.
+ */
+export function buildLanguageInstruction(languageCode: string): string {
+  if (!languageCode) return "";
+
+  const lang = SUPPORTED_LANGUAGES.find((l) => l.value === languageCode);
+
+  if (languageCode === "en-IN") {
+    return "Respond in English.";
+  }
+
+  if (languageCode === "hi-Latn") {
+    return "Respond in casual Hinglish (Hindi words spelled in Latin/English script, like a WhatsApp message between friends) — not formal Hindi and not pure English.";
+  }
+
+  if (lang) {
+    return `Respond ONLY in ${lang.label} (${lang.nativeName}), unless the user writes in English — then you may reply in English.`;
+  }
+
+  // Unknown/unsupported code: fall back to a generic but still directive instruction.
+  return `Respond primarily in: ${languageCode}.`;
+}
 
 /** Concatenates every document from every knowledge base attached to an agent. */
 export async function fetchAgentKnowledgeText(agentId: string): Promise<string> {
@@ -64,7 +90,7 @@ export function buildAgentSystemPrompt(opts: {
   );
 
   if (config.language) {
-    parts.push(`Respond primarily in: ${config.language}.`);
+    parts.push(buildLanguageInstruction(config.language));
   }
   if (config.workingHours) {
     parts.push(`Normal working hours for human hand-off: ${config.workingHours}.`);

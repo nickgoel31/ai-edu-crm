@@ -37,6 +37,7 @@ import {
 } from "@/types";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { InlineTagPicker } from "@/components/tags/inline-tag-picker";
+import { ChurnRiskBadge } from "@/components/students/churn-risk-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -563,6 +564,9 @@ export default function StudentDetailPage() {
 
           {/* Stage Dropdown Selector */}
           <div className="flex items-center gap-3 bg-muted/40 p-2 rounded-xl border border-border shrink-0">
+            {(student.stage === StudentStage.ENROLLED || student.stage === StudentStage.ACTIVE) && (
+              <ChurnRiskBadge studentId={student.id} />
+            )}
             <span className="text-xs font-semibold text-muted-foreground pl-2">Stage:</span>
             {canEdit ? (
               <Select

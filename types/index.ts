@@ -662,3 +662,57 @@ export interface MessageTemplate {
   createdAt: string | Date;
   updatedAt: string | Date;
 }
+
+// ── Batch & timetable management ──────────────────────────────────────────
+export const ClassAttendanceStatus = {
+  PRESENT: "PRESENT",
+  ABSENT: "ABSENT",
+  LATE: "LATE",
+} as const;
+export type ClassAttendanceStatus = (typeof ClassAttendanceStatus)[keyof typeof ClassAttendanceStatus];
+
+export const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+export type Weekday = (typeof WEEKDAYS)[number];
+
+// ── Free demo-class booking ────────────────────────────────────────────────
+export const DemoBookingStatus = {
+  SCHEDULED: "SCHEDULED",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+  NO_SHOW: "NO_SHOW",
+} as const;
+export type DemoBookingStatus = (typeof DemoBookingStatus)[keyof typeof DemoBookingStatus];
+
+// ── Referral payout automation ─────────────────────────────────────────────
+export const ReferralPayoutStatus = {
+  PENDING: "PENDING",
+  PAID: "PAID",
+  CANCELLED: "CANCELLED",
+} as const;
+export type ReferralPayoutStatus = (typeof ReferralPayoutStatus)[keyof typeof ReferralPayoutStatus];
+
+// ── Admissions-season WhatsApp broadcasts ─────────────────────────────────
+export const BroadcastStatus = {
+  DRAFT: "DRAFT",
+  SENDING: "SENDING",
+  SENT: "SENT",
+  FAILED: "FAILED",
+} as const;
+export type BroadcastStatus = (typeof BroadcastStatus)[keyof typeof BroadcastStatus];
+
+export const BroadcastSegmentType = {
+  LEADS: "LEADS",
+  STUDENTS: "STUDENTS",
+} as const;
+export type BroadcastSegmentType = (typeof BroadcastSegmentType)[keyof typeof BroadcastSegmentType];
+
+// ── Regional language support (agent prompting + display labels) ─────────
+export const SUPPORTED_LANGUAGES: { value: string; label: string; nativeName: string }[] = [
+  { value: "en-IN", label: "English (India)", nativeName: "English" },
+  { value: "hi-IN", label: "Hindi", nativeName: "हिन्दी" },
+  { value: "hi-Latn", label: "Hinglish (colloquial)", nativeName: "Hinglish" },
+  { value: "mr-IN", label: "Marathi", nativeName: "मराठी" },
+  { value: "ta-IN", label: "Tamil", nativeName: "தமிழ்" },
+  { value: "te-IN", label: "Telugu", nativeName: "తెలుగు" },
+  { value: "kn-IN", label: "Kannada", nativeName: "ಕನ್ನಡ" },
+];

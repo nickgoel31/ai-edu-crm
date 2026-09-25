@@ -398,6 +398,55 @@ export function getScopedPrismaClient(
         },
       },
       messageTemplate: createTenantQueryHooks("organizationId"),
+      batch: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.batch.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      classAttendance: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.classAttendance.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      guardian: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.guardian.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      demoSlot: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.demoSlot.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      demoBooking: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.demoBooking.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      referralPayout: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.referralPayout.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
+      broadcastCampaign: {
+        ...createTenantQueryHooks(),
+        async findUnique({ args }: any) {
+          const { where, ...rest } = args;
+          return prisma.broadcastCampaign.findFirst({ where: { ...(where as object), organizationId }, ...rest });
+        },
+      },
       knowledgeBase: {
         ...createTenantQueryHooks(),
         async findUnique({ args }: any) {

@@ -6,6 +6,10 @@ import {
 } from "@/lib/lead-ingestion";
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activity";
+import { AIConfigError, generateChatCompletion, resolveModel } from "@/lib/ai/llm";
+import { buildAgentSystemPrompt, fetchAgentKnowledgeText } from "@/lib/ai/agent-context";
+import { parseAgentConfig } from "@/lib/agent-config";
+import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 
 /**
  * WhatsApp Business API Inbound Webhook Endpoint
@@ -112,35 +116,161 @@ export async function POST(req: Request) {
       notes: `Inbound WhatsApp: "${messageText}"`,
     });
 
-    // Record conversation under WhatsApp Agent if available
+    // Record conversation under a LIVE WhatsApp Agent if available (most
+    // recently updated one, since there may be several WhatsApp-channel
+    // agents configured in the marketplace).
     const whatsappAgent = await prisma.agent.findFirst({
       where: {
         organizationId,
         channel: AgentChannel.WHATSAPP,
+        status: "LIVE",
       },
+      orderBy: { updatedAt: "desc" },
     });
 
+    let aiReplySkipped = false;
+    let aiReplySkippedReason: string | undefined;
+    let aiReplyText: string | undefined;
+
     if (whatsappAgent) {
-      const conversation = await prisma.conversation.create({
-        data: {
+      const inboundLine = `Applicant: ${messageText}`;
+
+      // Continue an existing recent conversation with this lead+agent
+      // (last 30 minutes) instead of always creating a new single-turn one,
+      // so multi-turn context is preserved.
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const existingConversation = await prisma.conversation.findFirst({
+        where: {
           agentId: whatsappAgent.id,
           leadId: result.lead.id,
-          channel: "WHATSAPP",
-          transcript: `Applicant: ${messageText}`,
-          costInPaise: 15,
+          createdAt: { gte: thirtyMinutesAgo },
         },
+        orderBy: { createdAt: "desc" },
       });
+
+      let conversation = existingConversation;
+      let costInPaise = 0;
+
+      // 1. Generate and send a real AI reply. Failures here (e.g. missing
+      // ANTHROPIC_API_KEY) must never break lead capture, which already
+      // succeeded above.
+      try {
+        const organization = await prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        });
+
+        const agentName = whatsappAgent.name.split("-")[0].trim();
+        const config = parseAgentConfig(whatsappAgent.config);
+        const model = resolveModel(config.aiModel);
+        const knowledgeText = await fetchAgentKnowledgeText(whatsappAgent.id);
+
+        const system = buildAgentSystemPrompt({
+          role: whatsappAgent.role as any,
+          agentName,
+          organizationName: organization?.name || "the institution",
+          config,
+          knowledgeText,
+          extraContext:
+            "You are replying to an INBOUND WhatsApp message from a prospective student/applicant. Keep the reply short and natural, like a real WhatsApp message.",
+        });
+
+        // Prior turns as context, parsed from the existing transcript.
+        const priorMessages: { role: "user" | "assistant"; content: string }[] = [];
+        if (existingConversation?.transcript) {
+          for (const line of existingConversation.transcript.split("\n")) {
+            if (line.startsWith("Applicant: ")) {
+              priorMessages.push({ role: "user", content: line.slice("Applicant: ".length) });
+            } else if (line.startsWith("Agent: ")) {
+              priorMessages.push({ role: "assistant", content: line.slice("Agent: ".length) });
+            }
+          }
+        }
+        priorMessages.push({ role: "user", content: messageText });
+
+        const completion = await generateChatCompletion({
+          model,
+          system,
+          messages: priorMessages,
+        });
+
+        aiReplyText = completion.text;
+        costInPaise = completion.costInPaise;
+
+        // 2. Actually send the reply back to WhatsApp.
+        const sendResult = await sendWhatsAppMessage({
+          organizationId,
+          agentConfig: config,
+          to: senderPhone,
+          message: aiReplyText,
+        });
+
+        if (!sendResult.success) {
+          console.warn(
+            `WhatsApp reply generated but not delivered (provider: ${sendResult.provider}): ${sendResult.error}`
+          );
+        }
+
+        const newTranscriptTurn = `${inboundLine}\nAgent: ${aiReplyText}`;
+
+        if (conversation) {
+          const updatedTranscript = `${conversation.transcript}\n${newTranscriptTurn}`;
+          conversation = await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              transcript: updatedTranscript,
+              costInPaise: (conversation.costInPaise || 0) + costInPaise,
+            },
+          });
+        } else {
+          conversation = await prisma.conversation.create({
+            data: {
+              agentId: whatsappAgent.id,
+              leadId: result.lead.id,
+              channel: "WHATSAPP",
+              transcript: newTranscriptTurn,
+              costInPaise,
+            },
+          });
+        }
+      } catch (aiError: any) {
+        aiReplySkipped = true;
+        aiReplySkippedReason =
+          aiError instanceof AIConfigError
+            ? aiError.message
+            : aiError?.message || "Failed to generate AI reply.";
+        console.warn("WhatsApp AI reply skipped:", aiReplySkippedReason);
+
+        // Still record the inbound turn even if the AI reply failed.
+        if (conversation) {
+          conversation = await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { transcript: `${conversation.transcript}\n${inboundLine}` },
+          });
+        } else {
+          conversation = await prisma.conversation.create({
+            data: {
+              agentId: whatsappAgent.id,
+              leadId: result.lead.id,
+              channel: "WHATSAPP",
+              transcript: inboundLine,
+              costInPaise: 0,
+            },
+          });
+        }
+      }
 
       await logActivity({
         organizationId,
         entityType: "LEAD",
         entityId: result.lead.id,
         type: "AGENT_CONVERSATION",
-        content: `Applicant: ${messageText}`.slice(0, 500),
+        content: (aiReplyText ? `${inboundLine}\nAgent: ${aiReplyText}` : inboundLine).slice(0, 500),
         metadata: {
           conversationId: conversation.id,
           agentName: whatsappAgent.name,
           channel: "WHATSAPP",
+          aiReplySkipped,
         },
       });
     }
@@ -151,6 +281,8 @@ export async function POST(req: Request) {
       isNew: result.isNew,
       leadId: result.lead.id,
       inboundMessage: messageText,
+      ...(aiReplyText ? { aiReply: aiReplyText } : {}),
+      ...(aiReplySkipped ? { aiReplySkipped: true, reason: aiReplySkippedReason } : {}),
     });
   } catch (error: any) {
     console.error("WhatsApp Webhook Error:", error);

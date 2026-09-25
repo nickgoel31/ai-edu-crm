@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database, CreditCard, KeyRound } from "lucide-react";
+import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database, CreditCard, KeyRound, Gift, Megaphone, Building2, UserCog } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function SettingsPage() {
@@ -326,6 +326,90 @@ export default function SettingsPage() {
                 </div>
               </div>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/referrals" className="group block">
+          <Card className="hover:ring-amber-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Referral Payouts
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Track alumni/student referrals and UPI payout incentives (ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/broadcasts" className="group block">
+          <Card className="hover:ring-orange-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    WhatsApp Broadcasts
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    DLT/opt-in compliant bulk outreach for admissions season (ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/organization" className="group block">
+          <Card className="hover:ring-teal-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/25 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Organization & Branding
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Branding, UPI payment ID, and franchise/branch linking (ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/guardians" className="group block">
+          <Card className="hover:ring-fuchsia-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-500/25 group-hover:bg-fuchsia-600 group-hover:text-white transition-colors">
+                  <UserCog className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Parent/Guardian Accounts
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Create portal logins so parents can track attendance, fees, and documents
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 transition-colors" />
             </CardContent>
           </Card>
         </Link>
