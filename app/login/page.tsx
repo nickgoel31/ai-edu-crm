@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Lock, Mail, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 
 function SignupSuccessBanner() {
   const searchParams = useSearchParams();
@@ -22,6 +22,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,10 +36,14 @@ export default function LoginPage() {
       const res = await signIn("credentials", {
         email,
         password,
+        totp: needsTotp ? totp : undefined,
         redirect: false,
       });
 
-      if (res?.error) {
+      if (res?.error === "2FA_REQUIRED") {
+        setNeedsTotp(true);
+        setIsLoading(false);
+      } else if (res?.error) {
         setError(res.error);
         setIsLoading(false);
       } else {
@@ -256,29 +262,63 @@ export default function LoginPage() {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          <div className="relative">
-            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email address"
-              className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
-            />
-          </div>
+          {needsTotp ? (
+            <>
+              <div className="flex items-center gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3.5 py-2.5 text-xs text-blue-300">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>Enter the 6-digit code from your authenticator app.</span>
+              </div>
+              <div className="relative">
+                <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  required
+                  value={totp}
+                  onChange={(e) => setTotp(e.target.value)}
+                  placeholder="123456 or backup code"
+                  className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors tracking-widest"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNeedsTotp(false);
+                  setTotp("");
+                }}
+                className="text-2xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                &larr; Back
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email address"
+                  className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+                />
+              </div>
 
-          <div className="relative">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
-            />
-          </div>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
+                />
+              </div>
+            </>
+          )}
 
           <button
             type="submit"

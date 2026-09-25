@@ -54,6 +54,11 @@ model User {
   password       String
   role           String   @default("COUNSELOR")
   name           String?
+  // TOTP two-factor auth. Secret is encrypted at rest (lib/crypto.ts);
+  // backupCodes is a JSON array of bcrypt hashes, each single-use.
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

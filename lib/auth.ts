@@ -2,6 +2,8 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { decryptField } from "@/lib/crypto";
+import { verifyTotpCode, consumeBackupCode } from "@/lib/totp";
 
 // In-memory brute-force lockout, keyed by normalized email. This is a
 // best-effort guard against credential stuffing on the login form; it
@@ -58,6 +60,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        totp: { label: "Two-factor code", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -92,6 +95,37 @@ export const authOptions: NextAuthOptions = {
         if (!isPasswordValid) {
           recordFailedAttempt(email);
           throw new Error("Invalid email or password.");
+        }
+
+        if (user.twoFactorEnabled) {
+          const code = credentials.totp?.trim();
+          if (!code) {
+            // Distinct, machine-checkable error the login page uses to
+            // switch to a "enter your 6-digit code" step instead of
+            // showing a generic failure.
+            throw new Error("2FA_REQUIRED");
+          }
+
+          const secret = decryptField(user.twoFactorSecret);
+          let verified = secret ? verifyTotpCode(secret, code) : false;
+
+          if (!verified && user.twoFactorBackupCodes) {
+            const hashedCodes: string[] = JSON.parse(user.twoFactorBackupCodes);
+            const usedIndex = await consumeBackupCode(hashedCodes, code);
+            if (usedIndex >= 0) {
+              verified = true;
+              hashedCodes.splice(usedIndex, 1);
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { twoFactorBackupCodes: JSON.stringify(hashedCodes) },
+              });
+            }
+          }
+
+          if (!verified) {
+            recordFailedAttempt(email);
+            throw new Error("Invalid two-factor code.");
+          }
         }
 
         clearFailedAttempts(email);
