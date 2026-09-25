@@ -169,7 +169,7 @@ export default function RegisterPage() {
       if (loginRes?.error) {
         router.push("/login?signup_success=true");
       } else {
-        router.push("/?onboarding=start");
+        router.push("/onboarding");
         router.refresh();
       }
     } catch (err: any) {
