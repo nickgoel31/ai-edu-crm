@@ -1,14 +1,3 @@
--- Fresh-install bootstrap script for a new Turso/libsql database. This is
--- identical to prisma/migrations/20260925130811_baseline/migration.sql —
--- kept as a separate file only because that's how this project's existing
--- Turso instance was originally provisioned (no `prisma migrate` history
--- against it). It was significantly out of date (missing ~10 tables added
--- since) until regenerated here via:
---   npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
--- Regenerate the same way after future schema.prisma changes, or better:
--- switch to `prisma migrate deploy` against a real migration history once
--- this project's production database has one (see the migrations/ folder).
---
 -- CreateTable
 CREATE TABLE "organizations" (
     "id" TEXT NOT NULL PRIMARY KEY,
