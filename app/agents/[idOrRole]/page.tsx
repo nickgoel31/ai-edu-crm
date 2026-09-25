@@ -44,7 +44,7 @@ import {
 import { TranscriptDialog } from "@/components/agents/transcript-dialog";
 import { DynamicAgentForm } from "@/components/agents/dynamic-agent-form";
 import { getCatalogEntry, isValidAgentRole } from "@/lib/agent-catalog";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -413,6 +413,18 @@ export default function AgentDetailPage() {
             />
             <span>{agent.status}</span>
           </Badge>
+
+          {agent.channel === AgentChannel.WEBSITE_CHAT && (
+            <LinkButton
+              variant="outline"
+              href={`/widget/${agent.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Live Widget</span>
+            </LinkButton>
+          )}
 
           {canMutate && (
             <Button

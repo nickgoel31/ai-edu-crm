@@ -5,6 +5,8 @@ import { getScopedPrismaClient } from "@/lib/scoped-prisma";
 import { assertCanMutate } from "@/lib/rbac";
 import { logActivity } from "@/lib/activity";
 import { ConversationOutcome } from "@/types";
+import { AIConfigError, generateChatCompletion, resolveModel } from "@/lib/ai/llm";
+import { buildAgentSystemPrompt, fetchAgentKnowledgeText, parseAgentConfigSafe } from "@/lib/ai/agent-context";
 
 export async function POST(
   req: Request,
@@ -69,17 +71,80 @@ export async function POST(
       );
     }
 
-    // 3. Generate realistic transcript based on lead profile
+    // 3. Generate a real call transcript with the LLM, driven by the
+    // agent's configured system prompt, its knowledge base, and the lead's
+    // actual CRM profile.
     const callGoal = goal || "Initial qualification and campus visit booking";
     const agentName = agent.name.split("-")[0].trim();
-    const transcript = `[AI Voice Caller - ${agent.name}]
-Agent: Hello ${lead.name}, this is ${agentName} from Apex Technical & Vocational Academy. Am I speaking with ${lead.name}?
-Lead: Yes, speaking.
-Agent: I noticed you recently inquired through ${lead.source.replace(/_/g, " ")}. Are you looking to join our upcoming vocational training cohort?
-Lead: Yes, I am exploring hands-on certification programs to upgrade my skills.
-Agent: Wonderful! Based on your profile (Score: ${lead.score || 80} pts), you're eligible for our practical lab demo this Saturday at 11:00 AM. Would that time work for you?
-Lead: That sounds great, please confirm the slot for me.
-Agent: Confirmed! We've reserved your campus demo seat. An admissions counselor will also share the directions via WhatsApp. Thank you, ${lead.name}!`;
+    const config = parseAgentConfigSafe(agent.config);
+    const model = resolveModel(config.aiModel);
+
+    const organization = await scopedDb.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { name: true },
+    });
+
+    const knowledgeText = await fetchAgentKnowledgeText(agent.id);
+    const system = buildAgentSystemPrompt({
+      role: agent.role as any,
+      agentName,
+      organizationName: organization?.name || "the institution",
+      config,
+      knowledgeText,
+      extraContext: [
+        "You are placing an OUTBOUND phone call to a lead. Write the FULL call transcript",
+        "from greeting to close, alternating between 'Agent:' and 'Lead:' lines, roleplaying",
+        "a realistic, cooperative-but-plausible prospective student based on their profile below.",
+        "Keep it to 6-12 exchanges.",
+        "",
+        `Call goal: ${callGoal}`,
+        `Lead name: ${lead.name}`,
+        `Lead source: ${lead.source}`,
+        `Lead score: ${lead.score ?? "unknown"}`,
+        `Lead stage: ${lead.stage}`,
+        "",
+        "End your response with exactly one final line in this format (no extra text after it):",
+        "OUTCOME: CONVERTED | ESCALATED | CONTINUED | NO_RESPONSE",
+      ].join("\n"),
+    });
+
+    let transcript: string;
+    let resolvedOutcome: ConversationOutcome = ConversationOutcome.CONTINUED;
+    let costInPaise = 0;
+
+    try {
+      const completion = await generateChatCompletion({
+        model,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: "Generate the call transcript now.",
+          },
+        ],
+        maxTokens: 1200,
+      });
+
+      const outcomeMatch = completion.text.match(/OUTCOME:\s*(CONVERTED|ESCALATED|CONTINUED|NO_RESPONSE)/i);
+      if (outcomeMatch && Object.values(ConversationOutcome).includes(outcomeMatch[1].toUpperCase() as ConversationOutcome)) {
+        resolvedOutcome = outcomeMatch[1].toUpperCase() as ConversationOutcome;
+      }
+      transcript = outcomeMatch
+        ? completion.text.slice(0, outcomeMatch.index).trim()
+        : completion.text;
+      costInPaise = completion.costInPaise;
+    } catch (aiError: any) {
+      if (aiError instanceof AIConfigError) {
+        return NextResponse.json(
+          {
+            error:
+              "AI calling is not configured yet. Set ANTHROPIC_API_KEY in the environment to enable real AI voice agents.",
+          },
+          { status: 503 }
+        );
+      }
+      throw aiError;
+    }
 
     // 4. Save Conversation record
     const conversation = await scopedDb.conversation.create({
@@ -88,8 +153,8 @@ Agent: Confirmed! We've reserved your campus demo seat. An admissions counselor 
         leadId: lead.id,
         channel: "VOICE_CALL",
         transcript,
-        outcome: ConversationOutcome.CONVERTED,
-        costInPaise: 380, // ~3.80 INR
+        outcome: resolvedOutcome,
+        costInPaise,
       },
       include: {
         agent: {
@@ -109,13 +174,13 @@ Agent: Confirmed! We've reserved your campus demo seat. An admissions counselor 
       entityType: "LEAD",
       entityId: lead.id,
       type: "CALL",
-      content: `AI Agent (${agent.name}) completed an automated outbound voice screening call. Outcome: Demo booked for Saturday.`,
+      content: `AI Agent (${agent.name}) completed an automated outbound voice screening call. Outcome: ${resolvedOutcome}.`,
       metadata: {
         agentId: agent.id,
         agentName: agent.name,
         conversationId: conversation.id,
-        durationSeconds: 114,
-        costPaise: 380,
+        costPaise: costInPaise,
+        model,
       },
     });
 

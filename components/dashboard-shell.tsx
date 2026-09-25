@@ -8,8 +8,9 @@ import { BottomNav } from "@/components/bottom-nav";
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthRoute = pathname === "/login" || pathname === "/register";
+  const isPublicRoute = isAuthRoute || pathname?.startsWith("/widget/");
 
-  if (isAuthRoute) {
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 
