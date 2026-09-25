@@ -120,7 +120,10 @@ export function parseLinkedInLeadGenPayload(body: Record<string, any>): ParsedLe
   // Facebook/LinkedIn-style field_data[] fallback, as sent by several relays.
   if (Array.isArray(body.field_data)) {
     for (const f of body.field_data) {
-      const key = (f.name || "").toString().toLowerCase();
+      // field_data names are conventionally snake_case ("full_name"),
+      // unlike formResponse.answers' human labels ("Full Name") — normalize
+      // both to the same "space-separated lowercase" key shape.
+      const key = (f.name || "").toString().toLowerCase().replace(/_/g, " ");
       const value = Array.isArray(f.values) ? str(f.values[0]) : str(f.value);
       if (key && value) answers[key] = value;
     }
