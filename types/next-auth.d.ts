@@ -1,4 +1,5 @@
 import { Role } from "@/types";
+import { ModuleAccessMap } from "@/lib/rbac";
 import { DefaultSession, DefaultUser } from "next-auth";
 import "next-auth/jwt";
 
@@ -9,6 +10,7 @@ declare module "next-auth" {
       role: Role;
       organizationId: string;
       organizationName: string;
+      moduleAccess: ModuleAccessMap;
     } & DefaultSession["user"];
   }
 
@@ -17,6 +19,7 @@ declare module "next-auth" {
     role: Role;
     organizationId: string;
     organizationName: string;
+    moduleAccess: ModuleAccessMap;
   }
 }
 
@@ -26,5 +29,6 @@ declare module "next-auth/jwt" {
     role: Role;
     organizationId: string;
     organizationName: string;
+    moduleAccess: ModuleAccessMap;
   }
 }

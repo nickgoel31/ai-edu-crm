@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
-import { assertCanMutate } from "@/lib/rbac";
+import { assertCanMutate, assertModuleAccess } from "@/lib/rbac";
 import { StudentStage, DocumentStatus, PaymentStatus } from "@/types";
 import { normalizePhoneNumber, checkAndCreateStudentDuplicateMatch } from "@/lib/dedup";
 
@@ -14,6 +14,12 @@ export async function GET(req: Request) {
       { error: "Unauthorized: Active session required." },
       { status: 401 }
     );
+  }
+
+  try {
+    assertModuleAccess(session, "students");
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
   }
 
   try {
@@ -255,6 +261,7 @@ export async function POST(req: Request) {
 
   try {
     assertCanMutate(session);
+    assertModuleAccess(session, "students");
     const body = await req.json();
     const { name, phone, email, stage, program, cohort, branch, leadId, customFields } = body;
 

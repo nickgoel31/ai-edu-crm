@@ -63,6 +63,11 @@ model User {
   twoFactorSecret      String?
   twoFactorEnabled     Boolean  @default(false)
   twoFactorBackupCodes String?
+  // Per-user module access override, e.g. {"leads":true,"students":false}.
+  // Null = full access to every module their role can otherwise reach
+  // (today's default behavior, unchanged for every existing user).
+  // ADMIN is never restricted by this — see lib/rbac.ts.
+  moduleAccess   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

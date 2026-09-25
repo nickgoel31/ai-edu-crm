@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getScopedPrismaClient } from "@/lib/scoped-prisma";
+import { assertModuleAccess } from "@/lib/rbac";
 import { LeadSource, LeadStage } from "@/types";
 import { normalizePhoneNumber, checkAndCreateLeadDuplicateMatch } from "@/lib/dedup";
 import { recalculateLeadScore } from "@/lib/lead-scoring";
@@ -15,6 +16,12 @@ export async function GET(req: Request) {
       { error: "Unauthorized: Active session required." },
       { status: 401 }
     );
+  }
+
+  try {
+    assertModuleAccess(session, "leads");
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
   }
 
   try {
@@ -196,6 +203,12 @@ export async function POST(req: Request) {
       { error: "Unauthorized: Active session required." },
       { status: 401 }
     );
+  }
+
+  try {
+    assertModuleAccess(session, "leads");
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
   }
 
   try {

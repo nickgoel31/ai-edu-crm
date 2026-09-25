@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { decryptField } from "@/lib/crypto";
 import { verifyTotpCode, consumeBackupCode } from "@/lib/totp";
+import { parseModuleAccess } from "@/lib/rbac";
 
 // In-memory brute-force lockout, keyed by normalized email. This is a
 // best-effort guard against credential stuffing on the login form; it
@@ -137,6 +138,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role as any,
           organizationId: user.organizationId,
           organizationName: user.organization.name,
+          moduleAccess: parseModuleAccess(user.moduleAccess),
         };
       },
     }),
@@ -148,6 +150,7 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.organizationId = user.organizationId;
         token.organizationName = user.organizationName;
+        token.moduleAccess = user.moduleAccess;
       }
       return token;
     },
@@ -157,6 +160,18 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role;
         session.user.organizationId = token.organizationId;
         session.user.organizationName = token.organizationName;
+        // Re-read from DB (not the JWT payload set at login) so an admin
+        // revoking a module right takes effect on this user's very next
+        // request instead of waiting for their session to expire/refresh.
+        try {
+          const fresh = await prisma.user.findUnique({
+            where: { id: token.id },
+            select: { moduleAccess: true },
+          });
+          session.user.moduleAccess = parseModuleAccess(fresh?.moduleAccess ?? (token.moduleAccess as any));
+        } catch {
+          session.user.moduleAccess = parseModuleAccess(token.moduleAccess as any);
+        }
       }
       return session;
     },

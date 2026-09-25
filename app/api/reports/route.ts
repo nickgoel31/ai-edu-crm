@@ -10,6 +10,7 @@ import {
   Role,
 } from "@/types";
 import { getSlaComplianceStats } from "@/lib/sla";
+import { assertModuleAccess } from "@/lib/rbac";
 
 // Estimated benchmark Cost Per Lead (CPL) in INR for non-agent paid channels
 const ESTIMATED_CPL: Record<string, number> = {
@@ -32,6 +33,12 @@ export async function GET(req: Request) {
       { error: "Unauthorized: Active session required." },
       { status: 401 }
     );
+  }
+
+  try {
+    assertModuleAccess(session, "reports");
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
   }
 
   try {

@@ -31,12 +31,30 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
+type AppModule = "leads" | "students" | "agents" | "reports";
+const MODULES: { id: AppModule; label: string }[] = [
+  { id: "leads", label: "Leads" },
+  { id: "students", label: "Students" },
+  { id: "agents", label: "Agents" },
+  { id: "reports", label: "Reports" },
+];
+
 interface OrgUser {
   id: string;
   name: string | null;
   email: string;
   role: Role;
+  moduleAccess?: string | null;
   createdAt: string;
+}
+
+function parseModuleAccess(raw: string | null | undefined): Partial<Record<AppModule, boolean>> {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) || {};
+  } catch {
+    return {};
+  }
 }
 
 export default function UsersSettingsPage() {
@@ -53,6 +71,11 @@ export default function UsersSettingsPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("COUNSELOR");
+
+  // Per-user module permissions editor
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingAccess, setEditingAccess] = useState<Partial<Record<AppModule, boolean>>>({});
+  const [savingPermissions, setSavingPermissions] = useState(false);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -74,6 +97,33 @@ export default function UsersSettingsPage() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const openPermissionsEditor = (u: OrgUser) => {
+    setEditingUserId(u.id);
+    setEditingAccess(parseModuleAccess(u.moduleAccess));
+  };
+
+  const savePermissions = async () => {
+    if (!editingUserId) return;
+    setSavingPermissions(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/settings/users/${editingUserId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moduleAccess: editingAccess }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to save permissions.");
+      setSuccess("Permissions updated.");
+      setEditingUserId(null);
+      fetchUsers();
+    } catch (err: any) {
+      setError(err?.message || "Failed to save permissions.");
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,31 +382,91 @@ export default function UsersSettingsPage() {
                 <TableHead>Member</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Added Date</TableHead>
+                <TableHead>Permissions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell>
-                    <div className="font-medium text-foreground">
-                      {u.name || "No name set"}
-                    </div>
-                    <div className="text-2xs text-muted-foreground">{u.email}</div>
-                  </TableCell>
-                  <TableCell>{getRoleBadge(u.role)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString(undefined, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {users.map((u) => {
+                const access = parseModuleAccess(u.moduleAccess);
+                const restrictedModules = MODULES.filter((m) => access[m.id] === false);
+                return (
+                  <TableRow key={u.id}>
+                    <TableCell>
+                      <div className="font-medium text-foreground">
+                        {u.name || "No name set"}
+                      </div>
+                      <div className="text-2xs text-muted-foreground">{u.email}</div>
+                    </TableCell>
+                    <TableCell>{getRoleBadge(u.role)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(u.createdAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {u.role === "ADMIN" ? (
+                        <span className="text-2xs text-muted-foreground">Full access</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {restrictedModules.length > 0 ? (
+                            <span className="text-2xs text-amber-500">
+                              {restrictedModules.length} module{restrictedModules.length > 1 ? "s" : ""} restricted
+                            </span>
+                          ) : (
+                            <span className="text-2xs text-muted-foreground">Full access</span>
+                          )}
+                          <Button variant="outline" size="xs" onClick={() => openPermissionsEditor(u)}>
+                            Edit
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
       </Card>
+
+      {editingUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="max-w-sm w-full space-y-4">
+            <h3 className="text-sm font-semibold text-foreground">Module permissions</h3>
+            <p className="text-2xs text-muted-foreground">
+              Unchecked modules stay fully accessible (default). Uncheck to restrict access.
+            </p>
+            <div className="space-y-2">
+              {MODULES.map((m) => {
+                const checked = editingAccess[m.id] !== false;
+                return (
+                  <label key={m.id} className="flex items-center justify-between text-xs">
+                    <span className="text-foreground">{m.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setEditingAccess((prev) => ({ ...prev, [m.id]: e.target.checked }))
+                      }
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={savePermissions} isDisabled={savingPermissions}>
+                {savingPermissions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Save</span>
+              </Button>
+              <Button variant="ghost" onClick={() => setEditingUserId(null)} isDisabled={savingPermissions}>
+                Cancel
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

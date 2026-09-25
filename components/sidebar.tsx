@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canAccessModule, type AppModule } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
@@ -305,6 +306,10 @@ function SidebarContent() {
     },
   ];
 
+  const visibleNavItems = navItems.filter((item) =>
+    canAccessModule(userRole, item.id as AppModule, session?.user?.moduleAccess)
+  );
+
   const renderNavRow = (item: NavItem) => {
     const isActive = item.matcher(pathname);
     const accent = ACCENT_STYLES[item.color];
@@ -556,7 +561,7 @@ function SidebarContent() {
 
       {/* ── 4. Navigation ─────────────────────────────────────── */}
       <nav className="flex-1 px-1.5 space-y-0.5 overflow-y-auto overflow-x-hidden pb-4">
-        {navItems.map(renderNavRow)}
+        {visibleNavItems.map(renderNavRow)}
       </nav>
 
       {/* ── 5. Account Footer — avatar, org, role + sign-out menu ─── */}
