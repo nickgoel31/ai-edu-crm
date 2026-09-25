@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database, CreditCard } from "lucide-react";
+import { Users, Webhook, ShieldCheck, ArrowRight, Bell, Shield, Zap, Sliders, Tag, Flame, Clock, MessageSquare, Lock, Database, CreditCard, KeyRound } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function SettingsPage() {
@@ -263,6 +263,27 @@ export default function SettingsPage() {
                 </div>
               </div>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/settings/sso" className="group block">
+          <Card className="hover:ring-violet-500/50 transition-all">
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/25 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Single Sign-On (SAML)
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Connect Okta, Azure AD, or another SAML identity provider (ADMIN-only)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors" />
             </CardContent>
           </Card>
         </Link>

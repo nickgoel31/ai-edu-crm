@@ -25,6 +25,15 @@ model Organization {
   trialEndsAt          DateTime?
   onboardingDismissed  Boolean   @default(false)
 
+  // SAML SSO (see lib/sso/saml.ts). ssoDomain drives email-domain-based
+  // IdP discovery on the login page. ssoCert is the IdP's public signing
+  // certificate — not a secret, so stored as-is (unlike agent/ERP secrets).
+  ssoEnabled    Boolean @default(false)
+  ssoDomain     String? @unique
+  ssoEntryPoint String?
+  ssoIssuer     String?
+  ssoCert       String?
+
   users                   User[]
   leads                   Lead[]
   students                Student[]

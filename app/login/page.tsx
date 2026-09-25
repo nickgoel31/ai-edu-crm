@@ -1,10 +1,28 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { Lock, Mail, AlertCircle, CheckCircle2, Loader2, ShieldCheck, KeyRound } from "lucide-react";
+
+const SSO_ERROR_MESSAGES: Record<string, string> = {
+  invalid_assertion: "Your identity provider's response could not be verified. Contact your admin.",
+  no_email_in_assertion: "Your identity provider didn't send an email address. Contact your admin.",
+  no_matching_account: "No account found for your email in this organization. Ask an admin to invite you first.",
+};
+
+function SsoErrorBanner() {
+  const searchParams = useSearchParams();
+  const code = searchParams.get("sso_error");
+  if (!code) return null;
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 text-xs text-red-400">
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      <span>{SSO_ERROR_MESSAGES[code] || "Single sign-on failed. Please try again."}</span>
+    </div>
+  );
+}
 
 function SignupSuccessBanner() {
   const searchParams = useSearchParams();
@@ -26,6 +44,29 @@ export default function LoginPage() {
   const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [ssoOrg, setSsoOrg] = useState<{ slug: string; name: string } | null>(null);
+  const [ssoRedirecting, setSsoRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (!email.includes("@")) {
+      setSsoOrg(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`/api/auth/saml/lookup?email=${encodeURIComponent(email)}`)
+        .then((r) => r.json())
+        .then((data) => setSsoOrg(data.ssoAvailable ? { slug: data.orgSlug, name: data.orgName } : null))
+        .catch(() => setSsoOrg(null));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [email]);
+
+  const handleSsoLogin = () => {
+    if (!ssoOrg) return;
+    setSsoRedirecting(true);
+    window.location.href = `/api/auth/saml/login?org=${encodeURIComponent(ssoOrg.slug)}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,6 +292,9 @@ export default function LoginPage() {
         <Suspense fallback={null}>
           <SignupSuccessBanner />
         </Suspense>
+        <Suspense fallback={null}>
+          <SsoErrorBanner />
+        </Suspense>
 
         {/* Error Alert */}
         {error && (
@@ -306,6 +350,18 @@ export default function LoginPage() {
                 />
               </div>
 
+              {ssoOrg && (
+                <button
+                  type="button"
+                  onClick={handleSsoLogin}
+                  disabled={ssoRedirecting}
+                  className="w-full h-10 rounded-lg border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/15 text-violet-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {ssoRedirecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                  <span>Sign in with {ssoOrg.name} SSO</span>
+                </button>
+              )}
+
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input
@@ -317,6 +373,11 @@ export default function LoginPage() {
                   className="w-full h-11 rounded-lg bg-[#0e0f12] border border-zinc-800/90 pl-10 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors"
                 />
               </div>
+              {ssoOrg && (
+                <p className="text-2xs text-zinc-500 text-center">
+                  Or continue with your password below.
+                </p>
+              )}
             </>
           )}
 
